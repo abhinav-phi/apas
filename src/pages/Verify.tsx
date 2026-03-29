@@ -84,10 +84,21 @@ export default function Verify() {
       }
 
       // Log scan via RPC
-      const { data: scanResult } = await (supabase.rpc as any)("log_product_scan", {
-        p_product_id: prod.id,
-        p_user_agent: navigator.userAgent,
-      });
+      // const { data: scanResult } = await (supabase.rpc as any)("log_product_scan", {
+      //   p_product_id: prod.id,
+      //   p_user_agent: navigator.userAgent,
+      // });
+            const { data: scanResult, error } = await supabase.rpc(
+        "log_product_scan",
+        {
+          p_product_id: prod.id,
+          p_user_agent: navigator.userAgent,
+        }
+      );
+
+      if (error) {
+        console.error("RPC Error:", error);
+      }
       const currentScanCount = (scanResult as any)?.scan_count || 0;
       setScanCount(currentScanCount);
 
