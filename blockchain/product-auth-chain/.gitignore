@@ -1,0 +1,20 @@
+# Compiler output
+/out/
+/cache/
+
+# Broadcast artifacts (contains private tx data)
+/broadcast/
+
+# Environment variables (NEVER push this)
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Dependencies (will be restored by forge install)
+/lib/
