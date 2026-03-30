@@ -99,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        // fetchUserData sets role+profile internally — await it fully
         await fetchUserData(session.user.id);
       }
+      // role is guaranteed to be set (or null) by now
       initialized = true;
       setLoading(false);
     });
@@ -108,9 +110,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes AFTER initial load
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!initialized) return; // skip — initial getSession handles it
+
+      // Mark loading so nothing renders with stale role
+      setLoading(true);
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user) {
+        // Await fully — role will be set before loading goes false
         await fetchUserData(session.user.id);
       } else {
         setRole(null);

@@ -26,9 +26,28 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
   const { user, role, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>;
+
+  // Full-screen spinner while auth + role are loading
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background">
+        <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  // No user → go to login
   if (!user) return <Navigate to="/auth" replace />;
-  if (allowedRoles && role && !allowedRoles.includes(role)) return <Navigate to="/dashboard" replace />;
+
+  // User exists but role is still null → redirect to /auth
+  // (role should always be set by trigger/backfill; null = broken state)
+  if (!role) return <Navigate to="/auth" replace />;
+
+  // User has a role, but it's not in the allowed list for this route
+  if (allowedRoles && !allowedRoles.includes(role)) return <Navigate to="/dashboard" replace />;
+
+  // All good — render children
   return <>{children}</>;
 }
 
