@@ -135,6 +135,7 @@ export type Database = {
       products: {
         Row: {
           batch_id: string | null
+          blockchain_tx: string | null
           brand: string
           category: string
           created_at: string
@@ -142,6 +143,7 @@ export type Database = {
           expiry_date: string | null
           flag_reason: string | null
           id: string
+          is_claimed: boolean
           is_flagged: boolean
           manufacture_date: string | null
           manufacturer_id: string
@@ -150,12 +152,16 @@ export type Database = {
           origin_country: string | null
           product_code: string
           qr_data: string
+          scan_status: string
+          secure_token: string
           status: string
+          trust_score: number
           updated_at: string
           verification_hash: string
         }
         Insert: {
           batch_id?: string | null
+          blockchain_tx?: string | null
           brand: string
           category?: string
           created_at?: string
@@ -163,6 +169,7 @@ export type Database = {
           expiry_date?: string | null
           flag_reason?: string | null
           id?: string
+          is_claimed?: boolean
           is_flagged?: boolean
           manufacture_date?: string | null
           manufacturer_id: string
@@ -171,12 +178,16 @@ export type Database = {
           origin_country?: string | null
           product_code: string
           qr_data: string
+          scan_status?: string
+          secure_token?: string
           status?: string
+          trust_score?: number
           updated_at?: string
           verification_hash: string
         }
         Update: {
           batch_id?: string | null
+          blockchain_tx?: string | null
           brand?: string
           category?: string
           created_at?: string
@@ -184,6 +195,7 @@ export type Database = {
           expiry_date?: string | null
           flag_reason?: string | null
           id?: string
+          is_claimed?: boolean
           is_flagged?: boolean
           manufacture_date?: string | null
           manufacturer_id?: string
@@ -192,7 +204,10 @@ export type Database = {
           origin_country?: string | null
           product_code?: string
           qr_data?: string
+          scan_status?: string
+          secure_token?: string
           status?: string
+          trust_score?: number
           updated_at?: string
           verification_hash?: string
         }
@@ -362,12 +377,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      anchor_to_blockchain: {
+        Args: {
+          p_product_id: string
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      verify_product_secure: {
+        Args: {
+          p_product_code: string
+          p_lat?: number
+          p_lng?: number
+          p_user_agent?: string
+        }
+        Returns: Json
       }
     }
     Enums: {

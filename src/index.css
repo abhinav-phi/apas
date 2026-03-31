@@ -130,3 +130,59 @@
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
   }
 }
+
+/* ── Animations ────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  50%      { box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.15); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out both;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── QR Scanner ────────────────────────────────── */
+#qr-reader {
+  border: none !important;
+  background: transparent !important;
+}
+
+#qr-reader video {
+  border-radius: 0.75rem;
+}
+
+#qr-reader__scan_region {
+  min-height: 280px;
+}
+
+/* Hide the html5-qrcode branding */
+#qr-reader__dashboard_section_csr button,
+#qr-reader__dashboard_section_fsr button,
+#qr-reader a[href*="scanapp"] {
+  display: none !important;
+}
+
+/* ── Print ─────────────────────────────────────── */
+@media print {
+  body { background: white !important; }
+  .print\\:hidden { display: none !important; }
+  .print\\:block { display: block !important; }
+}
