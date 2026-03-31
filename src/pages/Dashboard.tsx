@@ -4,12 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Package, Shield, AlertTriangle, QrCode, Truck, CheckCircle2 } from "lucide-react";
+import { Package, Shield, AlertTriangle, QrCode, Truck, CheckCircle2, Link2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 export default function Dashboard() {
   const { user, role } = useAuth();
-  const [stats, setStats] = useState({ products: 0, flagged: 0, scans: 0, events: 0, alerts: 0 });
+  const [stats, setStats] = useState({ products: 0, flagged: 0, scans: 0, events: 0, alerts: 0, anchored: 0 });
   const [recentProducts, setRecentProducts] = useState<Tables<'products'>[]>([]);
 
   useEffect(() => {
@@ -17,13 +17,14 @@ export default function Dashboard() {
     const fetchStats = async () => {
       if (role === "supplier") {
         const { count } = await supabase.from("supply_chain_events").select("id", { count: "exact", head: true }).eq("actor_id", user!.id);
-        setStats({ products: 0, flagged: 0, scans: 0, events: count || 0, alerts: 0 });
+        setStats({ products: 0, flagged: 0, scans: 0, events: count || 0, alerts: 0, anchored: 0 });
       } else {
-        const [prodRes, flagRes, scanRes, eventRes] = await Promise.all([
+        const [prodRes, flagRes, scanRes, eventRes, anchoredRes] = await Promise.all([
           supabase.from("products").select("id", { count: "exact", head: true }),
           supabase.from("products").select("id", { count: "exact", head: true }).eq("is_flagged", true),
           supabase.from("scan_logs").select("id", { count: "exact", head: true }),
           supabase.from("supply_chain_events").select("id", { count: "exact", head: true }),
+          supabase.from("products").select("id", { count: "exact", head: true }).not("blockchain_tx", "is", null),
         ]);
         setStats({
           products: prodRes.count || 0,
@@ -31,6 +32,7 @@ export default function Dashboard() {
           scans: scanRes.count || 0,
           events: eventRes.count || 0,
           alerts: 0,
+          anchored: anchoredRes.count || 0,
         });
       }
 
@@ -45,7 +47,7 @@ export default function Dashboard() {
       { title: "Total Products", value: stats.products, icon: <Package className="w-5 h-5" />, variant: "primary" as const },
       { title: "Flagged Products", value: stats.flagged, icon: <AlertTriangle className="w-5 h-5" />, variant: stats.flagged > 0 ? "destructive" as const : "default" as const },
       { title: "Total Scans", value: stats.scans, icon: <QrCode className="w-5 h-5" />, variant: "default" as const },
-      { title: "Supply Chain Events", value: stats.events, icon: <Truck className="w-5 h-5" />, variant: "default" as const },
+      { title: "On-Chain", value: stats.anchored, icon: <Link2 className="w-5 h-5" />, variant: "success" as const },
     ],
     supplier: [
       { title: "Events Recorded", value: stats.events, icon: <Truck className="w-5 h-5" />, variant: "primary" as const },
@@ -84,8 +86,10 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold">Recent Products</h2>
             </div>
             {recentProducts.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                No products yet. {role === "manufacturer" && "Start by registering a product."}
+              <div className="p-8 text-center">
+                <Package className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">No products yet</p>
+                {role === "manufacturer" && <p className="text-xs text-muted-foreground/60 mt-1">Start by registering your first product.</p>}
               </div>
             ) : (
               <div className="divide-y divide-border">
