@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Package, Truck, QrCode, BarChart3, Lock, ArrowRight, CheckCircle2, FileText } from "lucide-react";
 import { motion } from "framer-motion";
+import { AppFooter } from "@/components/layout/AppFooter";
 
 const features = [
   { icon: Package, title: "Product Registration", desc: "Register products with unique IDs, batch management, and tamper-resistant hashing." },
@@ -120,13 +121,13 @@ export default function Index() {
       </section>
 
       {/* CTA */}
-      <section className="py-20">
+      <section className="py-20 flex-1">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="bg-gradient-primary rounded-2xl p-12 text-center">
-            <h2 className="text-3xl font-bold text-primary-foreground mb-4">Ready to Protect Your Products?</h2>
+          <div className="bg-primary rounded-2xl p-12 text-center text-primary-foreground">
+            <h2 className="text-3xl font-bold mb-4">Ready to Protect Your Products?</h2>
             <p className="text-primary-foreground/80 mb-8 max-w-md mx-auto">Join manufacturers worldwide using AuthentiChain to combat counterfeiting.</p>
             <Link to="/auth">
-              <Button size="lg" variant="secondary" className="font-semibold">
+              <Button size="lg" variant="secondary" className="font-semibold text-primary">
                 Get Started Now <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
@@ -134,16 +135,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-8">
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold">AuthentiChain</span>
-          </div>
-          <p className="text-xs text-muted-foreground">© 2026 AuthentiChain. All rights reserved.</p>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

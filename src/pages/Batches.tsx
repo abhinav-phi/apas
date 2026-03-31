@@ -30,18 +30,26 @@ export default function Batches() {
     fetchBatches().finally(() => setLoading(false));
   }, []);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const batchCode = generateBatchCode();
     const { error } = await supabase.from("batches").insert({
       batch_code: batchCode, name: form.name, manufacturer_id: user!.id,
       manufacture_date: form.manufacture_date || null, expiry_date: form.expiry_date || null,
     });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) { 
+      toast({ title: "Error", description: error.message, variant: "destructive" }); 
+      setIsSubmitting(false);
+      return; 
+    }
     toast({ title: "Batch created", description: `Code: ${batchCode}` });
     setDialogOpen(false);
     setForm({ name: "", manufacture_date: "", expiry_date: "" });
     fetchBatches();
+    setIsSubmitting(false);
   };
 
   return (
@@ -64,7 +72,9 @@ export default function Batches() {
                   <div><Label>Manufacture Date</Label><Input type="date" value={form.manufacture_date} onChange={(e) => setForm({ ...form, manufacture_date: e.target.value })} /></div>
                   <div><Label>Expiry Date</Label><Input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} /></div>
                 </div>
-                <Button type="submit" variant="hero" className="w-full">Create Batch</Button>
+                <Button type="submit" variant="hero" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Creating..." : "Create Batch"}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>

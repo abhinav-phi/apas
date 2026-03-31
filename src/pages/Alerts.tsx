@@ -32,16 +32,25 @@ export default function Alerts() {
   }, []);
 
   const resolve = async (id: string, productId: string) => {
-    await supabase.from("fraud_alerts").update({ is_resolved: true, resolved_by: user!.id, resolved_at: new Date().toISOString() }).eq("id", id);
-    // Check remaining unresolved alerts for this product
-    const { count } = await supabase.from("fraud_alerts").select("id", { count: "exact", head: true }).eq("product_id", productId).eq("is_resolved", false);
-    if (!count || count === 0) {
-      await supabase.from("products").update({ is_flagged: false, flag_reason: null }).eq("id", productId);
-      toast({ title: "Alert resolved", description: "Product has been unflagged." });
-    } else {
-      toast({ title: "Alert resolved" });
+    try {
+      const { error } = await supabase.from("fraud_alerts").update({ is_resolved: true, resolved_by: user!.id, resolved_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      
+      // Check remaining unresolved alerts for this product
+      const { count, error: countError } = await supabase.from("fraud_alerts").select("id", { count: "exact", head: true }).eq("product_id", productId).eq("is_resolved", false);
+      if (countError) throw countError;
+
+      if (!count || count === 0) {
+        const { error: updateError } = await supabase.from("products").update({ is_flagged: false, flag_reason: null }).eq("id", productId);
+        if (updateError) throw updateError;
+        toast({ title: "Alert resolved", description: "Product has been unflagged." });
+      } else {
+        toast({ title: "Alert resolved" });
+      }
+      fetchAlerts();
+    } catch (error: any) {
+      toast({ title: "Error resolving alert", description: error.message, variant: "destructive" });
     }
-    fetchAlerts();
   };
 
   const severityColors: Record<string, string> = {

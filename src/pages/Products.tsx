@@ -52,8 +52,11 @@ export default function Products() {
     init();
   }, []);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const productCode = generateProductCode();
     const ts = new Date().toISOString();
     const hash = generateProductHash({ productCode, name: form.name, brand: form.brand, manufacturerId: user!.id, timestamp: ts });
@@ -66,7 +69,11 @@ export default function Products() {
       batch_id: form.batch_id || null, manufacturer_id: user!.id, verification_hash: hash, qr_data: qrData,
     });
 
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) { 
+      toast({ title: "Error", description: error.message, variant: "destructive" }); 
+      setIsSubmitting(false);
+      return; 
+    }
 
     const eventHash = generateEventHash({ productId: productCode, eventType: "manufactured", actorId: user!.id, timestamp: ts });
     const { data: newProd } = await supabase.from("products").select("id").eq("product_code", productCode).single();
@@ -81,6 +88,7 @@ export default function Products() {
     setDialogOpen(false);
     setForm({ name: "", brand: "", category: "general", description: "", origin_country: "", manufacture_date: "", expiry_date: "", batch_id: "" });
     fetchProducts();
+    setIsSubmitting(false);
   };
 
   const handleAnchorBlockchain = async (productId: string, productCode: string) => {
@@ -179,7 +187,9 @@ export default function Products() {
                       </Select>
                     </div>
                   )}
-                  <Button type="submit" variant="hero" className="w-full">Register Product</Button>
+                  <Button type="submit" variant="hero" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? "Registering..." : "Register Product"}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>

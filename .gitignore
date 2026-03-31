@@ -13,7 +13,7 @@ node_modules
 # Build outputs
 dist
 dist-ssr
-
+.claude
 # Local env files 
 .env
 .env.*

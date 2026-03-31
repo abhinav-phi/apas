@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Shield, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
+import { AppFooter } from "@/components/layout/AppFooter";
 
 const stateTransitions = [
   { current: "manufactured", input: "ship", next: "shipped", desc: "Product leaves manufacturer" },
@@ -33,11 +34,11 @@ export default function SystemDesign() {
   useEffect(() => { document.title = "System Design — AuthentiChain"; }, []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <header className="border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Shield className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="font-bold text-sm">AuthentiChain</span>
@@ -46,7 +47,7 @@ export default function SystemDesign() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-10 space-y-10">
+      <main className="max-w-5xl mx-auto px-4 py-10 space-y-10 flex-1">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-3xl font-bold mb-2">System Design Documentation</h1>
           <p className="text-muted-foreground">Formal specification of the AuthentiChain supply chain integrity system.</p>
@@ -148,6 +149,8 @@ export default function SystemDesign() {
           </div>
         </section>
       </main>
+
+      <AppFooter />
     </div>
   );
 }

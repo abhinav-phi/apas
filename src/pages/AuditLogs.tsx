@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface AuditEvent {
   id: string;
@@ -18,6 +19,7 @@ interface AuditEvent {
 export default function AuditLogs() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     document.title = "Audit Logs — AuthentiChain";
@@ -28,18 +30,23 @@ export default function AuditLogs() {
   }, []);
 
   const exportCSV = () => {
-    const header = "Timestamp,Product Name,Product Code,Event Type,Location,Actor,Hash";
-    const rows = events.map(e =>
-      `"${new Date(e.created_at).toISOString()}","${e.products?.name || ""}","${e.products?.product_code || ""}","${e.event_type}","${e.location || ""}","${e.actor_id}","${e.event_hash}"`
-    );
-    const csv = [header, ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.download = `audit-log-${new Date().toISOString().split("T")[0]}.csv`;
-    a.href = url;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const header = "Timestamp,Product Name,Product Code,Event Type,Location,Actor,Hash";
+      const rows = events.map(e =>
+        `"${new Date(e.created_at).toISOString()}","${e.products?.name || ""}","${e.products?.product_code || ""}","${e.event_type}","${e.location || ""}","${e.actor_id}","${e.event_hash}"`
+      );
+      const csv = [header, ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.download = `audit-log-${new Date().toISOString().split("T")[0]}.csv`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export complete", description: "CSV file has been downloaded successfully." });
+    } catch (error: any) {
+      toast({ title: "Export failed", description: error.message, variant: "destructive" });
+    }
   };
 
   return (

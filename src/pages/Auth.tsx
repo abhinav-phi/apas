@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { AppHeader } from "@/components/layout/AppHeader";
+import { AppFooter } from "@/components/layout/AppFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +11,12 @@ import { motion } from "framer-motion";
 
 type AppRole = "manufacturer" | "supplier" | "customer" | "admin";
 
-export default function AuthPage() {
-  const [isSignUp, setIsSignUp] = useState(false);
+export default function AuthPage({ initialMode = "login" }: { initialMode?: "login" | "register" }) {
+  const [isSignUp, setIsSignUp] = useState(initialMode === "register");
+
+  useEffect(() => {
+    setIsSignUp(initialMode === "register");
+  }, [initialMode]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -47,7 +53,9 @@ export default function AuthPage() {
   ];
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col">
+      <AppHeader />
+      <div className="flex-1 flex">
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(255,255,255,0.1),transparent_50%)]" />
@@ -158,9 +166,13 @@ export default function AuthPage() {
 
           <p className="text-sm text-center text-muted-foreground mt-6">
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button type="button" className="text-primary font-medium hover:underline" onClick={() => { setIsSignUp(!isSignUp); setError(""); }}>
+            <Link
+              to={isSignUp ? "/login" : "/register"}
+              className="text-primary font-medium hover:underline"
+              onClick={() => setError("")}
+            >
               {isSignUp ? "Sign In" : "Sign Up"}
-            </button>
+            </Link>
           </p>
 
           <div className="mt-6 text-center">
@@ -170,6 +182,8 @@ export default function AuthPage() {
           </div>
         </motion.div>
       </div>
+      </div>
+      <AppFooter />
     </div>
   );
 }

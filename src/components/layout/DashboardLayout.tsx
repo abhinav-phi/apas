@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Package, BarChart3, Shield, QrCode, Truck, Users, AlertTriangle,
@@ -45,6 +46,7 @@ const roleLabels: Record<string, string> = {
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, role, profile, signOut } = useAuth();
+  const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -62,18 +64,27 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
+          <Link to="/dashboard" className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border hover:bg-sidebar-accent/50 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Shield className="w-4 h-4 text-primary-foreground" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-sidebar-primary-foreground">AuthentiChain</h1>
               <p className="text-xs text-sidebar-foreground/60">{role ? roleLabels[role] : ""}</p>
             </div>
-          </div>
+          </Link>
 
           {/* Nav */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <Link
+              to="/"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              Back to Home
+            </Link>
+            <div className="border-t border-sidebar-border my-2" />
             {navItems.length > 0 ? (
               navItems.map((item) => {
                 const isActive = location.pathname === item.path;
@@ -141,7 +152,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="flex-1" />
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative" onClick={() => {
+            toast({ title: "No new notifications", description: "You're all caught up." });
+          }}>
             <Bell className="w-5 h-5 text-muted-foreground" />
           </Button>
         </header>

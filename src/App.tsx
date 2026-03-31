@@ -68,7 +68,9 @@ const App = () => (
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<PublicOnlyRoute><Auth /></PublicOnlyRoute>} />
+              <Route path="/login" element={<PublicOnlyRoute><Auth initialMode="login" /></PublicOnlyRoute>} />
+              <Route path="/register" element={<PublicOnlyRoute><Auth initialMode="register" /></PublicOnlyRoute>} />
+              <Route path="/auth" element={<Navigate to="/login" replace />} />
               <Route path="/verify" element={<Verify />} />
               <Route path="/system-design" element={<SystemDesign />} />
 
