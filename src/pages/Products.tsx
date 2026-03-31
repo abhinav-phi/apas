@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateProductCode, generateProductHash, generateQRData, generateEventHash } from "@/lib/hash";
-import { Package, Plus, Search } from "lucide-react";
+import { Package, Plus, Search, Link2, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -80,6 +80,17 @@ export default function Products() {
     toast({ title: "Product registered", description: `Code: ${productCode}` });
     setDialogOpen(false);
     setForm({ name: "", brand: "", category: "general", description: "", origin_country: "", manufacture_date: "", expiry_date: "", batch_id: "" });
+    fetchProducts();
+  };
+
+  const handleAnchorBlockchain = async (productId: string, productCode: string) => {
+    const { data, error } = await supabase.rpc("anchor_to_blockchain", { p_product_id: productId });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    const result = data as any;
+    toast({ title: "⛓️ Anchored to Blockchain", description: `TX: ${result.tx_hash?.substring(0, 20)}...` });
     fetchProducts();
   };
 
@@ -189,6 +200,7 @@ export default function Products() {
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Code</th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Category</th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Chain</th>
                   <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Created</th>
                   {role === "manufacturer" && <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Actions</th>}
                 </tr>
@@ -221,18 +233,34 @@ export default function Products() {
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.product_code}</td>
                         <td className="px-4 py-3 text-sm capitalize">{p.category}</td>
                         <td className="px-4 py-3"><StatusBadge status={p.is_flagged ? "suspicious" : p.status} /></td>
+                        <td className="px-4 py-3">
+                          {p.blockchain_tx ? (
+                            <a href={`https://sepolia.etherscan.io/tx/${p.blockchain_tx}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-500/20 transition-colors">
+                              ✅ Sepolia <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</td>
                         {role === "manufacturer" && (
                           <td className="px-4 py-3">
-                            {p.status === "active" && (
-                              <Button variant="destructive" size="sm" onClick={() => handleRecall(p.id, p.product_code)}>Recall</Button>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              {p.status === "active" && !p.blockchain_tx && (
+                                <Button variant="outline" size="sm" onClick={() => handleAnchorBlockchain(p.id, p.product_code)}>
+                                  <Link2 className="w-3 h-3 mr-1" /> Anchor
+                                </Button>
+                              )}
+                              {p.status === "active" && (
+                                <Button variant="destructive" size="sm" onClick={() => handleRecall(p.id, p.product_code)}>Recall</Button>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
                     ))}
                     {filtered.length === 0 && (
-                      <tr><td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No products found</td></tr>
+                      <tr><td colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No products found</td></tr>
                     )}
                   </>
                 )}
