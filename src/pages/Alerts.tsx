@@ -87,9 +87,10 @@ export default function Alerts() {
             </div>
           ))}
           {alerts.length === 0 && (
-            <div className="text-center py-12 bg-card rounded-xl border border-border">
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-success" />
-              <p className="text-sm text-muted-foreground">No fraud alerts detected</p>
+            <div className="text-center py-16 bg-card rounded-xl border border-border">
+              <CheckCircle2 className="w-14 h-14 mx-auto mb-4 text-success" />
+              <h3 className="text-lg font-semibold mb-1">All Systems Nominal ✅</h3>
+              <p className="text-sm text-muted-foreground">No fraud alerts detected. Your supply chain is secure.</p>
             </div>
           )}
         </div>
