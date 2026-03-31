@@ -13,7 +13,7 @@ export default function QRCodes() {
   useEffect(() => {
     document.title = "QR Codes — AuthentiChain";
     const fetch = async () => {
-      const { data } = await supabase.from("products").select("id, name, product_code, qr_data, brand").eq("manufacturer_id", user!.id).order("created_at", { ascending: false });
+      const { data } = await supabase.from("products").select("id, name, product_code, qr_data, brand, secure_token").eq("manufacturer_id", user!.id).order("created_at", { ascending: false });
       if (data) setProducts(data);
     };
     fetch();
@@ -53,7 +53,7 @@ export default function QRCodes() {
           {products.map((p) => (
             <div key={p.id} className="bg-card rounded-xl border border-border p-5 shadow-card text-center">
               <div className="inline-block p-4 bg-background rounded-lg border border-border mb-3">
-                <QRCodeSVG id={`qr-${p.product_code}`} value={`${window.location.origin}/verify?code=${encodeURIComponent(p.qr_data)}`} size={160} level="H" />
+                <QRCodeSVG id={`qr-${p.product_code}`} value={`${window.location.origin}/verify?token=${p.secure_token}`} size={160} level="H" />
               </div>
               <p className="text-sm font-semibold">{p.name}</p>
               <p className="text-xs text-muted-foreground font-mono">{p.product_code}</p>
