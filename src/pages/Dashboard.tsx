@@ -35,7 +35,6 @@ export default function Dashboard() {
           anchored: anchoredRes.count || 0,
         });
       }
-
       const { data: prods } = await supabase.from("products").select("*").order("created_at", { ascending: false }).limit(5);
       if (prods) setRecentProducts(prods);
     };
@@ -44,23 +43,23 @@ export default function Dashboard() {
 
   const statCards = {
     manufacturer: [
-      { title: "Total Products", value: stats.products, icon: <Package className="w-5 h-5" />, variant: "primary" as const },
-      { title: "Flagged Products", value: stats.flagged, icon: <AlertTriangle className="w-5 h-5" />, variant: stats.flagged > 0 ? "destructive" as const : "default" as const },
-      { title: "Total Scans", value: stats.scans, icon: <QrCode className="w-5 h-5" />, variant: "default" as const },
-      { title: "On-Chain", value: stats.anchored, icon: <Link2 className="w-5 h-5" />, variant: "success" as const },
+      { title: "Total Products", value: stats.products, icon: <Package className="w-4 h-4" />, variant: "primary" as const },
+      { title: "Flagged Products", value: stats.flagged, icon: <AlertTriangle className="w-4 h-4" />, variant: stats.flagged > 0 ? "destructive" as const : "default" as const },
+      { title: "Total Scans", value: stats.scans, icon: <QrCode className="w-4 h-4" />, variant: "default" as const },
+      { title: "On-Chain", value: stats.anchored, icon: <Link2 className="w-4 h-4" />, variant: "success" as const },
     ],
     supplier: [
-      { title: "Events Recorded", value: stats.events, icon: <Truck className="w-5 h-5" />, variant: "primary" as const },
+      { title: "Events Recorded", value: stats.events, icon: <Truck className="w-4 h-4" />, variant: "primary" as const },
     ],
     customer: [
-      { title: "Products Verified", value: stats.scans, icon: <Shield className="w-5 h-5" />, variant: "success" as const },
-      { title: "Genuine Products", value: stats.products - stats.flagged, icon: <CheckCircle2 className="w-5 h-5" />, variant: "success" as const },
+      { title: "Products Verified", value: stats.scans, icon: <Shield className="w-4 h-4" />, variant: "success" as const },
+      { title: "Genuine Products", value: stats.products - stats.flagged, icon: <CheckCircle2 className="w-4 h-4" />, variant: "success" as const },
     ],
     admin: [
-      { title: "Total Products", value: stats.products, icon: <Package className="w-5 h-5" />, variant: "primary" as const },
-      { title: "Flagged Products", value: stats.flagged, icon: <AlertTriangle className="w-5 h-5" />, variant: stats.flagged > 0 ? "destructive" as const : "default" as const },
-      { title: "Total Scans", value: stats.scans, icon: <QrCode className="w-5 h-5" />, variant: "default" as const },
-      { title: "Supply Chain Events", value: stats.events, icon: <Truck className="w-5 h-5" />, variant: "default" as const },
+      { title: "Total Products", value: stats.products, icon: <Package className="w-4 h-4" />, variant: "primary" as const },
+      { title: "Flagged Products", value: stats.flagged, icon: <AlertTriangle className="w-4 h-4" />, variant: stats.flagged > 0 ? "destructive" as const : "default" as const },
+      { title: "Total Scans", value: stats.scans, icon: <QrCode className="w-4 h-4" />, variant: "default" as const },
+      { title: "Supply Chain Events", value: stats.events, icon: <Truck className="w-4 h-4" />, variant: "default" as const },
     ],
   };
 
@@ -68,41 +67,80 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-8">
+        {/* Page header */}
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Overview of your supply chain activity</p>
+          <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: '#71ffe8', fontFamily: 'IBM Plex Mono, monospace' }}>
+            Overview
+          </p>
+          <h1 className="font-headline text-2xl font-extrabold tracking-tight" style={{ color: '#dfe2eb' }}>Dashboard</h1>
+          <p className="text-sm mt-1" style={{ color: '#849490', fontFamily: 'Geist Sans, sans-serif' }}>
+            Supply chain activity overview
+          </p>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {cards.map((c) => (
+          {cards.map(c => (
             <StatCard key={c.title} {...c} />
           ))}
         </div>
 
+        {/* Recent Products */}
         {role !== "supplier" && (
-          <div className="bg-card rounded-xl border border-border shadow-card">
-            <div className="px-5 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold">Recent Products</h2>
+          <div style={{ background: '#161B22', border: '1px solid rgba(59,74,70,0.3)' }}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(59,74,70,0.3)' }}>
+              <h2 className="font-headline font-bold text-base" style={{ color: '#dfe2eb' }}>Recent Products</h2>
+              <span className="text-[10px] uppercase tracking-widest" style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace' }}>
+                Latest {recentProducts.length}
+              </span>
             </div>
+
             {recentProducts.length === 0 ? (
-              <div className="p-8 text-center">
-                <Package className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">No products yet</p>
-                {role === "manufacturer" && <p className="text-xs text-muted-foreground/60 mt-1">Start by registering your first product.</p>}
+              <div className="p-12 text-center">
+                <div className="w-12 h-12 flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(113,255,232,0.05)', color: '#849490' }}>
+                  <Package className="w-6 h-6" />
+                </div>
+                <p className="text-sm" style={{ color: '#849490', fontFamily: 'Geist Sans, sans-serif' }}>No products yet</p>
+                {role === "manufacturer" && (
+                  <p className="text-xs mt-1" style={{ color: 'rgba(132,148,144,0.6)', fontFamily: 'IBM Plex Mono, monospace' }}>
+                    Register your first product to get started
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="divide-y divide-border">
-                {recentProducts.map((p) => (
-                  <div key={p.id} className="flex items-center gap-4 px-5 py-3">
-                    <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-                      <Package className="w-4 h-4 text-primary" />
+              <div>
+                {/* Table header */}
+                <div className="grid grid-cols-12 gap-4 px-6 py-3" style={{ background: '#0a0e14', borderBottom: '1px solid rgba(59,74,70,0.2)' }}>
+                  {["Product", "Code", "Status"].map(h => (
+                    <div key={h} className={`${h === "Product" ? "col-span-6" : h === "Code" ? "col-span-3" : "col-span-3"} text-[10px] uppercase tracking-widest font-bold`} style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace' }}>
+                      {h}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{p.product_code}</p>
+                  ))}
+                </div>
+                {recentProducts.map(p => (
+                  <div
+                    key={p.id}
+                    className="grid grid-cols-12 gap-4 items-center px-6 py-4 transition-colors"
+                    style={{ borderBottom: '1px solid rgba(59,74,70,0.15)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#1c2026'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    <div className="col-span-6 flex items-center gap-3">
+                      <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: 'rgba(113,255,232,0.06)', color: '#71ffe8' }}>
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: '#dfe2eb', fontFamily: 'Geist Sans, sans-serif' }}>{p.name}</p>
+                        <p className="text-xs" style={{ color: '#849490', fontFamily: 'Geist Sans, sans-serif' }}>{p.brand}</p>
+                      </div>
                     </div>
-                    <StatusBadge status={p.is_flagged ? "suspicious" : p.status} />
+                    <div className="col-span-3">
+                      <span className="text-xs" style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace' }}>{p.product_code}</span>
+                    </div>
+                    <div className="col-span-3">
+                      <StatusBadge status={p.is_flagged ? "suspicious" : p.status} />
+                    </div>
                   </div>
                 ))}
               </div>
