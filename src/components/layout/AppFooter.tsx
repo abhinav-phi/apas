@@ -1,30 +1,43 @@
 import { Link } from "react-router-dom";
-import { Shield } from "lucide-react";
+import { FlowButton } from "@/components/ui/flow-button";
 
 export function AppFooter({ variant = "default" }: { variant?: "default" | "dark" }) {
-  const isDark = variant === "dark";
-
   return (
-    <footer className={`border-t py-8 mt-auto z-10 block shrink-0 transition-colors ${
-      isDark 
-        ? "border-white/10 bg-black/50 backdrop-blur-xl" 
-        : "border-border bg-card/80 backdrop-blur-xl"
-    }`}>
+    <footer
+      className="py-6 mt-auto shrink-0"
+      style={{
+        background: '#10141a',
+        borderTop: '1px solid rgba(113,255,232,0.08)',
+      }}
+    >
       <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-             <Shield className="w-3 h-3 text-primary-foreground" />
-          </div>
-          <span className={`text-sm font-semibold ${isDark ? "text-white" : ""}`}>AuthentiChain</span>
-        </div>
-        
-        <div className={`flex items-center gap-6 text-sm ${isDark ? "text-white/60" : "text-muted-foreground"}`}>
-           <Link to="/" className={`transition-colors ${isDark ? "hover:text-white" : "hover:text-foreground"}`}>Home</Link>
-           <Link to="/verify" className={`transition-colors ${isDark ? "hover:text-white" : "hover:text-foreground"}`}>Verify</Link>
-           <Link to="/system-design" className={`transition-colors ${isDark ? "hover:text-white" : "hover:text-foreground"}`}>System Design</Link>
+        <div className="flex items-center gap-3">
+          <img src="/apas.png" alt="AuthentiChain Logo" className="w-6 h-6 object-contain rounded-sm" />
+          <span className="font-headline font-bold text-sm" style={{ color: '#00e5cc' }}>
+            AuthentiChain
+          </span>
         </div>
 
-        <p className={`text-xs ${isDark ? "text-white/40" : "text-muted-foreground"}`}>© {new Date().getFullYear()} AuthentiChain. All rights reserved.</p>
+        <div className="flex items-center gap-6">
+          {[
+            { to: "/", label: "Home" },
+            { to: "/verify", label: "Verify" },
+            { to: "/system-design", label: "System Design" },
+          ].map(link => (
+            <FlowButton
+              key={link.to}
+              to={link.to}
+              text={link.label}
+              size="sm"
+              hideArrow={true}
+              className="opacity-80 hover:opacity-100"
+            />
+          ))}
+        </div>
+
+        <p style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+          © {new Date().getFullYear()} AuthentiChain
+        </p>
       </div>
     </footer>
   );
