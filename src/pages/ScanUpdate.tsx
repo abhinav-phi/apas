@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { FlowButton } from "@/components/ui/flow-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -111,9 +112,12 @@ export default function ScanUpdate() {
               <Label>Notes</Label>
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes..." />
             </div>
-            <Button type="submit" variant="hero" className="w-full" disabled={loading}>
-              <Send className="w-4 h-4 mr-1" /> {loading ? "Recording..." : "Record Event"}
-            </Button>
+              <FlowButton 
+                type="submit" 
+                size="full" 
+                disabled={loading} 
+                text={<span className="flex items-center gap-1"><Send className="w-4 h-4" /> {loading ? "Recording..." : "Record Event"}</span>} 
+              />
           </form>
         </div>
       </div>
