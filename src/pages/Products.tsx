@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { FlowButton } from "@/components/ui/flow-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -145,7 +146,12 @@ export default function Products() {
           {role === "manufacturer" && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="hero"><Plus className="w-4 h-4 mr-1" /> Register Product</Button>
+                <div className="inline-block">
+                  <FlowButton 
+                    text={<span className="flex items-center gap-1"><Plus className="w-4 h-4" /> Register Product</span>} 
+                    size="sm" 
+                  />
+                </div>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Register New Product</DialogTitle></DialogHeader>
@@ -187,9 +193,12 @@ export default function Products() {
                       </Select>
                     </div>
                   )}
-                  <Button type="submit" variant="hero" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? "Registering..." : "Register Product"}
-                  </Button>
+                  <FlowButton 
+                    type="submit" 
+                    size="full" 
+                    disabled={isSubmitting}
+                    text={isSubmitting ? "Registering..." : "Register Product"}
+                  />
                 </form>
               </DialogContent>
             </Dialog>
