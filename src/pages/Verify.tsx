@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyChainTimeline } from "@/components/ui/timeline";
+import { FlowButton } from "@/components/ui/flow-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -596,9 +597,7 @@ export default function Verify() {
         <header className="border-b bg-card/80 backdrop-blur-xl">
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <Shield className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
               <span className="font-bold text-sm">AuthentiChain</span>
             </Link>
           </div>
@@ -648,10 +647,9 @@ export default function Verify() {
             <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">
               {fakeInfo.subtitle}
             </p>
-            <Button onClick={resetVerification} variant="outline" size="lg">
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Scan Again
-            </Button>
+            <div className="flex justify-center mt-4">
+              <FlowButton onClick={resetVerification} size="sm" text={<span className="flex items-center gap-1"><RotateCcw className="w-4 h-4" /> Scan Again</span>} />
+            </div>
           </div>
         </div>
         <AppFooter />
@@ -710,9 +708,7 @@ export default function Verify() {
           <header className="border-b bg-card/80 backdrop-blur-xl">
             <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
               <Link to="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-primary-foreground" />
-                </div>
+                <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
                 <span className="font-bold text-sm">AuthentiChain</span>
               </Link>
               <span className="text-muted-foreground text-sm ml-auto">
@@ -881,16 +877,20 @@ export default function Verify() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button
-                onClick={() => window.print()}
-                variant="outline"
-                className="flex-1"
-              >
-                <Printer className="w-4 h-4 mr-2" /> Print Certificate
-              </Button>
-              <Button onClick={resetVerification} className="flex-1">
-                <RotateCcw className="w-4 h-4 mr-2" /> Scan Another
-              </Button>
+              <div className="flex-1 md:w-auto w-full">
+                <FlowButton
+                  onClick={() => window.print()}
+                  size="full"
+                  text={<span className="flex items-center gap-1"><Printer className="w-4 h-4" /> Print Certificate</span>}
+                />
+              </div>
+              <div className="flex-1 md:w-auto w-full">
+                <FlowButton 
+                  onClick={resetVerification} 
+                  size="full"
+                  text={<span className="flex items-center gap-1"><RotateCcw className="w-4 h-4" /> Scan Another</span>} 
+                />
+              </div>
             </div>
           </main>
         </div>
@@ -907,9 +907,7 @@ export default function Verify() {
       <header className="border-b bg-card/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Shield className="w-4 h-4 text-primary-foreground" />
-            </div>
+              <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
             <span className="font-bold text-sm">AuthentiChain</span>
           </Link>
           {/* Live geo badge in header */}
@@ -921,7 +919,7 @@ export default function Verify() {
 
       <main className="flex-1 max-w-lg mx-auto w-full px-4 sm:px-6 py-8">
         <div className="text-center mb-8">
-          <Shield className="w-10 h-10 text-primary mx-auto mb-3" />
+          <img src="/apas.png" alt="AuthentiChain Logo" className="w-12 h-12 object-contain mx-auto mb-3 rounded-sm bg-primary/10 p-1" />
           <h1 className="text-2xl font-bold text-foreground mb-1">
             Verify Product
           </h1>
@@ -967,9 +965,9 @@ export default function Verify() {
                   <p className="text-muted-foreground text-sm mb-4">
                     Point your camera at a QR code
                   </p>
-                  <Button onClick={startCamera}>
-                    <Camera className="w-4 h-4 mr-2" /> Open Camera
-                  </Button>
+                  <div className="flex justify-center mt-2">
+                    <FlowButton onClick={startCamera} size="sm" text={<span className="flex items-center gap-1"><Camera className="w-4 h-4" /> Open Camera</span>} />
+                  </div>
                   {cameraError && (
                     <p className="text-xs text-destructive mt-3 px-2">
                       {cameraError}
@@ -982,13 +980,13 @@ export default function Verify() {
             {/* Stop camera button */}
             {cameraActive && (
               <div className="absolute bottom-3 left-0 right-0 text-center z-20">
-                <Button
-                  onClick={() => stopCamera()}
-                  variant="outline"
-                  size="sm"
-                >
-                  <CameraOff className="w-4 h-4 mr-2" /> Stop Camera
-                </Button>
+                <div className="flex justify-center">
+                  <FlowButton 
+                    onClick={() => stopCamera()} 
+                    size="sm" 
+                    text={<span className="flex items-center gap-1"><CameraOff className="w-4 h-4" /> Stop Camera</span>} 
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -1020,9 +1018,9 @@ export default function Verify() {
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1"
           />
-          <Button type="submit">
-            <Search className="w-4 h-4 mr-1" /> Verify
-          </Button>
+          <div className="flex-shrink-0">
+            <FlowButton type="submit" size="sm" text={<span className="flex items-center gap-1"><Search className="w-4 h-4" /> Verify</span>} />
+          </div>
         </form>
 
         {/* How it works */}
