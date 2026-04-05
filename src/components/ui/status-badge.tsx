@@ -1,26 +1,34 @@
-import { cn } from "@/lib/utils";
-
 type StatusVariant = "genuine" | "suspicious" | "active" | "recalled" | "expired" | "in_transit" | "delivered" | "sold" | "default";
 
-const variants: Record<StatusVariant, string> = {
-  genuine: "bg-success/10 text-success border-success/20",
-  suspicious: "bg-destructive/10 text-destructive border-destructive/20",
-  active: "bg-success/10 text-success border-success/20",
-  recalled: "bg-destructive/10 text-destructive border-destructive/20",
-  expired: "bg-muted text-muted-foreground border-border",
-  in_transit: "bg-primary/10 text-primary border-primary/20",
-  delivered: "bg-success/10 text-success border-success/20",
-  sold: "bg-accent text-accent-foreground border-border",
-  default: "bg-secondary text-secondary-foreground border-border",
+const variants: Record<StatusVariant, { bg: string; color: string; border: string; label: string }> = {
+  genuine: { bg: "rgba(113,255,232,0.08)", color: "#71ffe8", border: "rgba(113,255,232,0.2)", label: "✓ Genuine" },
+  suspicious: { bg: "rgba(255,180,171,0.08)", color: "#ffb4ab", border: "rgba(255,180,171,0.25)", label: "⚠ Suspicious" },
+  active: { bg: "rgba(113,255,232,0.08)", color: "#71ffe8", border: "rgba(113,255,232,0.2)", label: "Active" },
+  recalled: { bg: "rgba(255,180,171,0.08)", color: "#ffb4ab", border: "rgba(255,180,171,0.25)", label: "Recalled" },
+  expired: { bg: "rgba(132,148,144,0.08)", color: "#849490", border: "rgba(132,148,144,0.2)", label: "Expired" },
+  in_transit: { bg: "rgba(113,255,232,0.06)", color: "#00e5cc", border: "rgba(113,255,232,0.15)", label: "In Transit" },
+  delivered: { bg: "rgba(113,255,232,0.08)", color: "#71ffe8", border: "rgba(113,255,232,0.2)", label: "Delivered" },
+  sold: { bg: "rgba(65,74,83,0.4)", color: "#b0b9c4", border: "rgba(65,74,83,0.5)", label: "Sold" },
+  default: { bg: "rgba(65,74,83,0.2)", color: "#849490", border: "rgba(65,74,83,0.3)", label: "Unknown" },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const variant = (status.toLowerCase().replace(/\s/g, "_") as StatusVariant) || "default";
+  const key = status.toLowerCase().replace(/\s/g, "_") as StatusVariant;
+  const style = variants[key] || variants.default;
+
   return (
-    <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border", variants[variant] || variants.default, className)}>
-      {status === "genuine" && "✅ "}
-      {status === "suspicious" && "❌ "}
-      {status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ")}
+    <span
+      className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${className || ""}`}
+      style={{
+        background: style.bg,
+        color: style.color,
+        border: `1px solid ${style.border}`,
+        fontFamily: 'IBM Plex Mono, monospace',
+        borderRadius: '0',
+        letterSpacing: '0.1em',
+      }}
+    >
+      {style.label}
     </span>
   );
 }
