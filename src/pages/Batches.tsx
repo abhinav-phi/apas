@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { FlowButton } from "@/components/ui/flow-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,9 +62,11 @@ export default function Batches() {
             <p className="text-sm text-muted-foreground mt-1">Manage product batches and lots</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="hero"><Plus className="w-4 h-4 mr-1" /> Create Batch</Button>
-            </DialogTrigger>
+              <DialogTrigger asChild>
+                <div className="inline-block">
+                  <FlowButton size="sm" text={<span className="flex items-center gap-1"><Plus className="w-4 h-4" /> Create Batch</span>} />
+                </div>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Create New Batch</DialogTitle></DialogHeader>
               <form onSubmit={handleCreate} className="space-y-4 mt-4">
@@ -72,9 +75,12 @@ export default function Batches() {
                   <div><Label>Manufacture Date</Label><Input type="date" value={form.manufacture_date} onChange={(e) => setForm({ ...form, manufacture_date: e.target.value })} /></div>
                   <div><Label>Expiry Date</Label><Input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} /></div>
                 </div>
-                <Button type="submit" variant="hero" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? "Creating..." : "Create Batch"}
-                </Button>
+                  <FlowButton 
+                    type="submit" 
+                    size="full" 
+                    disabled={isSubmitting} 
+                    text={isSubmitting ? "Creating..." : "Create Batch"} 
+                  />
               </form>
             </DialogContent>
           </Dialog>
