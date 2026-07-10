@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PaginationBar } from "@/components/ui/pagination-bar";
+import { useDebounce } from "@/hooks/use-debounce";
 
 interface AuditEvent {
   id: string;
@@ -16,24 +19,82 @@ interface AuditEvent {
   products: { name: string; product_code: string } | null;
 }
 
+const EVENT_COLORS: Record<string, string> = {
+  manufactured: "text-blue-400",
+  shipped: "text-amber-400",
+  in_transit: "text-amber-300",
+  received: "text-emerald-400",
+  delivered: "text-teal-400",
+  sold: "text-purple-400",
+  recalled: "text-red-400",
+};
+
+const PAGE_SIZE = 25;
+
 export default function AuditLogs() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const { toast } = useToast();
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const fetchLogs = useCallback(async (targetPage: number, q: string) => {
+    setLoading(true);
+    const from = (targetPage - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let query = supabase
+      .from("supply_chain_events")
+      .select("*, products(name, product_code)", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    const { data, error, count } = await query;
+
+    if (!error && data) {
+      // Filter client-side only when search is active
+      // (Supabase FK text search requires a special setup — we filter after fetch)
+      const filtered = q
+        ? (data as unknown as AuditEvent[]).filter((e) =>
+            e.event_type.includes(q.toLowerCase()) ||
+            (e.products?.name || "").toLowerCase().includes(q.toLowerCase()) ||
+            (e.products?.product_code || "").toLowerCase().includes(q.toLowerCase()) ||
+            (e.location || "").toLowerCase().includes(q.toLowerCase())
+          )
+        : (data as unknown as AuditEvent[]);
+
+      setEvents(filtered);
+      setTotalCount(count || 0);
+      setPage(targetPage);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     document.title = "Audit Logs — AuthentiChain";
-    supabase.from("supply_chain_events").select("*, products(name, product_code)").order("created_at", { ascending: false }).limit(100).then(({ data }) => {
-      if (data) setEvents(data as any);
-      setLoading(false);
-    });
-  }, []);
+    fetchLogs(1, debouncedSearch);
+  }, [debouncedSearch, fetchLogs]);
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     try {
+      const { data } = await supabase
+        .from("supply_chain_events")
+        .select("*, products(name, product_code)")
+        .order("created_at", { ascending: false });
+
+      if (!data || data.length === 0) {
+        toast({ title: "No data to export" });
+        return;
+      }
+
       const header = "Timestamp,Product Name,Product Code,Event Type,Location,Actor,Hash";
-      const rows = events.map(e =>
-        `"${new Date(e.created_at).toISOString()}","${e.products?.name || ""}","${e.products?.product_code || ""}","${e.event_type}","${e.location || ""}","${e.actor_id}","${e.event_hash}"`
+      const rows = (data as unknown as AuditEvent[]).map(
+        (e) =>
+          `"${new Date(e.created_at).toISOString()}","${e.products?.name || ""}","${e.products?.product_code || ""}","${e.event_type}","${e.location || ""}","${e.actor_id}","${e.event_hash}"`
       );
       const csv = [header, ...rows].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
@@ -43,9 +104,9 @@ export default function AuditLogs() {
       a.href = url;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "Export complete", description: "CSV file has been downloaded successfully." });
-    } catch (error: any) {
-      toast({ title: "Export failed", description: error.message, variant: "destructive" });
+      toast({ title: "Export complete", description: "CSV downloaded successfully." });
+    } catch (error: unknown) {
+      toast({ title: "Export failed", description: (error as Error).message, variant: "destructive" });
     }
   };
 
@@ -54,29 +115,45 @@ export default function AuditLogs() {
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Audit Logs</h1>
-            <p className="text-sm text-muted-foreground mt-1">Complete log of all system activities</p>
+            <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#71ffe8", fontFamily: "IBM Plex Mono, monospace" }}>
+              Audit
+            </p>
+            <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: "#dfe2eb" }}>Audit Logs</h1>
+            <p className="text-sm mt-1" style={{ color: "#849490" }}>
+              Complete, immutable log of all supply chain events
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={events.length === 0}>
             <Download className="w-4 h-4 mr-1" /> Export CSV
           </Button>
         </div>
 
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search by product, event type, location..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
         <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Timestamp</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Product</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Event</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Location</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Hash</th>
+                <tr className="border-b border-border" style={{ background: "#0a0e14" }}>
+                  {["Timestamp", "Product", "Event", "Location", "Hash (truncated)"].map((h) => (
+                    <th key={h} className="text-left text-xs font-medium px-4 py-3" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
+                  Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-8 w-32" /></td>
@@ -89,24 +166,46 @@ export default function AuditLogs() {
                   <>
                     {events.map((e) => (
                       <tr key={e.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-medium">{e.products?.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{e.products?.product_code}</p>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>
+                          {new Date(e.created_at).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-sm capitalize">{e.event_type.replace(/_/g, " ")}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{e.location || "—"}</td>
-                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground/50 truncate max-w-[120px]">{e.event_hash.substring(0, 16)}...</td>
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>{e.products?.name || "—"}</p>
+                          <p className="text-xs font-mono" style={{ color: "#849490" }}>{e.products?.product_code || "—"}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-sm font-medium capitalize ${EVENT_COLORS[e.event_type] || "text-foreground"}`}
+                          >
+                            {e.event_type.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm" style={{ color: "#849490" }}>{e.location || "—"}</td>
+                        <td className="px-4 py-3 text-xs font-mono truncate max-w-[120px]" style={{ color: "rgba(132,148,144,0.5)" }}>
+                          {e.event_hash.substring(0, 16)}...
+                        </td>
                       </tr>
                     ))}
                     {events.length === 0 && (
-                      <tr><td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">No audit logs yet</td></tr>
+                      <tr>
+                        <td colSpan={5} className="text-center py-12 text-sm" style={{ color: "#849490" }}>
+                          {debouncedSearch ? "No events matching your search." : "No audit logs yet."}
+                        </td>
+                      </tr>
                     )}
                   </>
                 )}
               </tbody>
             </table>
           </div>
+          <PaginationBar
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={PAGE_SIZE}
+            onPageChange={(p) => fetchLogs(p, debouncedSearch)}
+            isLoading={loading}
+          />
         </div>
       </div>
     </DashboardLayout>
