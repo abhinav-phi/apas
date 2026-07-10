@@ -2,11 +2,11 @@ import { Component, ReactNode } from "react";
 
 export class ErrorBoundary extends Component<
   { children: ReactNode },
-  { hasError: boolean; error?: Error }
+  { hasError: boolean; error?: Error | null }
 > {
-  constructor(props: any) {
+  constructor(props: React.PropsWithChildren<unknown>) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error) {
