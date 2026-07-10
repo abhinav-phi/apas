@@ -60,6 +60,15 @@ export default {
         "slide-in-right": "slide-in-right 0.3s ease-out",
         "pulse-glow": "pulse-glow 2s infinite",
       },
+      transitionDuration: {
+        "600": "600ms",
+        "800": "800ms",
+      },
+      transitionTimingFunction: {
+        "flow-1": "cubic-bezier(0.23,1,0.32,1)",
+        "flow-2": "cubic-bezier(0.34,1.56,0.64,1)",
+        "flow-3": "cubic-bezier(0.19,1,0.22,1)",
+      },
     },
   },
   plugins: [require("tailwindcss-animate")],
