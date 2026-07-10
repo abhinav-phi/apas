@@ -11,18 +11,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateProductCode, generateProductHash, generateQRData, generateEventHash } from "@/lib/hash";
-import { Package, Plus, Search, Link2, ExternalLink } from "lucide-react";
+import { Package, Plus, Search, Link2, ExternalLink, Eye, Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
 
 export default function Products() {
   const { user, role } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
-  const [batches, setBatches] = useState<any[]>([]);
+  const [batches, setBatches] = useState<Tables<"batches">[]>([]);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const csvInputRef = React.useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: "", brand: "", category: "general", description: "", origin_country: "",
     manufacture_date: "", expiry_date: "", batch_id: "",
@@ -98,8 +102,12 @@ export default function Products() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
-    const result = data as any;
-    toast({ title: "⛓️ Anchored to Blockchain", description: `TX: ${result.tx_hash?.substring(0, 20)}...` });
+    const result = data as { success: boolean; tx_hash: string; message: string };
+    // NOTE: This is a simulated hash anchor (SHA-256 fingerprint), not a real Ethereum transaction.
+    toast({
+      title: "🔗 Product Hash Anchored",
+      description: `SHA-256 anchor: ${result.tx_hash?.substring(0, 20)}... (simulated — real blockchain integration planned)`,
+    });
     fetchProducts();
   };
 
@@ -135,6 +143,99 @@ export default function Products() {
     p.brand.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportingCsv(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length < 2) throw new Error("CSV must contain a header and at least one row");
+
+        const headers = lines[0].toLowerCase().split(',');
+        const requiredHeaders = ['name', 'brand', 'category'];
+        if (!requiredHeaders.every(h => headers.includes(h))) {
+          throw new Error("CSV must contain columns: name, brand, category");
+        }
+
+        const nameIdx = headers.indexOf('name');
+        const brandIdx = headers.indexOf('brand');
+        const categoryIdx = headers.indexOf('category');
+        const descIdx = headers.indexOf('description');
+        const originIdx = headers.indexOf('origin_country');
+
+        const productsToInsert = [];
+        const eventsToInsert = [];
+        const ts = new Date().toISOString();
+
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].split(',').map(c => c.trim());
+          if (row.length < 3) continue;
+
+          const productCode = generateProductCode();
+          const hash = generateProductHash({
+            productCode,
+            name: row[nameIdx],
+            brand: row[brandIdx],
+            manufacturerId: user!.id,
+            timestamp: ts
+          });
+          const qrData = generateQRData(productCode, hash);
+
+          productsToInsert.push({
+            product_code: productCode,
+            name: row[nameIdx],
+            brand: row[brandIdx],
+            category: row[categoryIdx] || 'general',
+            description: descIdx > -1 ? row[descIdx] : null,
+            origin_country: originIdx > -1 ? row[originIdx] : null,
+            manufacturer_id: user!.id,
+            verification_hash: hash,
+            qr_data: qrData,
+          });
+        }
+
+        if (productsToInsert.length === 0) throw new Error("No valid rows found");
+
+        const { data: insertedProducts, error } = await supabase
+          .from("products")
+          .insert(productsToInsert)
+          .select("id, product_code");
+
+        if (error) throw error;
+
+        // Generate genesis events for all
+        if (insertedProducts && insertedProducts.length > 0) {
+          insertedProducts.forEach(p => {
+            const eventHash = generateEventHash({ productId: p.product_code, eventType: "manufactured", actorId: user!.id, timestamp: ts });
+            eventsToInsert.push({
+              product_id: p.id, actor_id: user!.id, event_type: "manufactured",
+              event_hash: eventHash,
+            });
+          });
+
+          await supabase.from("supply_chain_events").insert(eventsToInsert);
+        }
+
+        toast({ title: "Import Successful", description: `Imported ${productsToInsert.length} products.` });
+        fetchProducts();
+      } catch (err: unknown) {
+        toast({ title: "Import Failed", description: (err as Error).message, variant: "destructive" });
+      } finally {
+        setImportingCsv(false);
+        if (csvInputRef.current) csvInputRef.current.value = "";
+      }
+    };
+    reader.onerror = () => {
+      toast({ title: "Error", description: "Failed to read file", variant: "destructive" });
+      setImportingCsv(false);
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -144,15 +245,21 @@ export default function Products() {
             <p className="text-sm text-muted-foreground mt-1">Manage and track registered products</p>
           </div>
           {role === "manufacturer" && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <div className="inline-block">
-                  <FlowButton 
-                    text={<span className="flex items-center gap-1"><Plus className="w-4 h-4" /> Register Product</span>} 
-                    size="sm" 
-                  />
-                </div>
-              </DialogTrigger>
+            <div className="flex items-center gap-2">
+              <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvImport} />
+              <Button variant="outline" size="sm" onClick={() => csvInputRef.current?.click()} disabled={importingCsv} className="gap-1.5 border-dashed">
+                {importingCsv ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                CSV Import
+              </Button>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <div className="inline-block">
+                    <FlowButton 
+                      text={<span className="flex items-center gap-1"><Plus className="w-4 h-4" /> Register Product</span>} 
+                      size="sm" 
+                    />
+                  </div>
+                </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Register New Product</DialogTitle></DialogHeader>
                 <form onSubmit={handleCreate} className="space-y-4 mt-4">
@@ -202,6 +309,7 @@ export default function Products() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           )}
         </div>
 
@@ -239,7 +347,7 @@ export default function Products() {
                 ) : (
                   <>
                     {filtered.map((p) => (
-                      <tr key={p.id} className="hover:bg-muted/30 transition-colors">
+                      <tr key={p.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/products/${p.id}`)}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center"><Package className="w-4 h-4 text-primary" /></div>
@@ -254,9 +362,9 @@ export default function Products() {
                         <td className="px-4 py-3"><StatusBadge status={p.is_flagged ? "suspicious" : p.status} /></td>
                         <td className="px-4 py-3">
                           {p.blockchain_tx ? (
-                            <a href={`https://sepolia.etherscan.io/tx/${p.blockchain_tx}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold hover:bg-emerald-500/20 transition-colors">
-                              ✅ Sepolia <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold" title={`Hash: ${p.blockchain_tx}`}>
+                              🔗 Anchored
+                            </span>
                           ) : (
                             <span className="text-xs text-muted-foreground/40">—</span>
                           )}
