@@ -9,9 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function QRCodes() {
   const { user } = useAuth();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Tables<"products">[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const getVerifyUrl = (productCode: string) =>
+    `${window.location.origin}/verify?code=${productCode}`;
 
   useEffect(() => {
     document.title = "QR Codes — AuthentiChain";
@@ -91,6 +94,22 @@ export default function QRCodes() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const copyVerifyUrl = async (code: string) => {
+    const url = getVerifyUrl(code);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopiedId(`url-${code}`);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -121,11 +140,11 @@ export default function QRCodes() {
                   key={p.id}
                   className="bg-card rounded-xl border border-border p-5 shadow-sm text-center"
                 >
-                  {/* QR Code — pure black on white, product_code ONLY */}
+                  {/* QR Code — encodes the full verify URL */}
                   <div className="inline-block p-4 bg-white rounded-lg border border-border mb-3">
                     <QRCodeCanvas
                       id={`qr-${p.product_code}`}
-                      value={p.product_code}
+                      value={getVerifyUrl(p.product_code)}
                       size={220}
                       level="H"
                       bgColor="#FFFFFF"
@@ -145,7 +164,7 @@ export default function QRCodes() {
                   <p className="text-xs text-muted-foreground">{p.brand}</p>
 
                   {/* Actions */}
-                  <div className="flex gap-2 mt-3 justify-center">
+                  <div className="flex gap-2 mt-3 justify-center flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -159,14 +178,20 @@ export default function QRCodes() {
                       onClick={() => copyCode(p.product_code)}
                     >
                       {copiedId === p.product_code ? (
-                        <>
-                          <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-500" />
-                          Copied
-                        </>
+                        <><CheckCircle2 className="w-3 h-3 mr-1 text-emerald-500" /> Copied</>
                       ) : (
-                        <>
-                          <Copy className="w-3 h-3 mr-1" /> Code
-                        </>
+                        <><Copy className="w-3 h-3 mr-1" /> Code</>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyVerifyUrl(p.product_code)}
+                    >
+                      {copiedId === `url-${p.product_code}` ? (
+                        <><CheckCircle2 className="w-3 h-3 mr-1 text-emerald-500" /> Copied!</>
+                      ) : (
+                        <><Copy className="w-3 h-3 mr-1" /> URL</>
                       )}
                     </Button>
                   </div>
