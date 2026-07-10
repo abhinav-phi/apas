@@ -4,28 +4,37 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Package, BarChart3, Shield, QrCode, Truck, Users, AlertTriangle,
-  LogOut, Menu, X, ChevronRight, Home, FileText, Bell
+  LogOut, Menu, X, ChevronRight, Home, FileText, Bell, Settings, Send, Globe
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { FlowButton } from "@/components/ui/flow-button";
+import { NotificationsDropdown } from "./NotificationsDropdown";
+
+const SETTINGS_ITEM = { label: "Settings", path: "/settings", icon: <Settings className="w-4 h-4" /> };
 
 const roleNavItems: Record<string, { label: string; path: string; icon: ReactNode }[]> = {
   manufacturer: [
     { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
     { label: "Products", path: "/products", icon: <Package className="w-4 h-4" /> },
     { label: "Batches", path: "/batches", icon: <FileText className="w-4 h-4" /> },
+    { label: "Transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
     { label: "QR Codes", path: "/qr-codes", icon: <QrCode className="w-4 h-4" /> },
     { label: "Supply Chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
     { label: "Alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
+    SETTINGS_ITEM,
   ],
   supplier: [
     { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
     { label: "Scan & Update", path: "/scan-update", icon: <QrCode className="w-4 h-4" /> },
+    { label: "Transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
     { label: "Supply Chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
+    SETTINGS_ITEM,
   ],
   customer: [
     { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
     { label: "Verify Product", path: "/verify", icon: <Shield className="w-4 h-4" /> },
     { label: "My Products", path: "/my-products", icon: <Package className="w-4 h-4" /> },
+    SETTINGS_ITEM,
   ],
   admin: [
     { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
@@ -34,6 +43,7 @@ const roleNavItems: Record<string, { label: string; path: string; icon: ReactNod
     { label: "Fraud Alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
     { label: "Analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" /> },
     { label: "Audit Logs", path: "/audit-logs", icon: <FileText className="w-4 h-4" /> },
+    SETTINGS_ITEM,
   ],
 };
 
@@ -58,7 +68,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const { t, i18n } = useTranslation();
   const navItems = role ? roleNavItems[role] || [] : [];
+  
+  const toggleLanguage = () => {
+    i18n.changeLanguage(i18n.language === "hi" ? "en" : "hi");
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -107,7 +122,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="my-2" style={{ height: '1px', background: 'rgba(113,255,232,0.06)' }} />
 
           {navItems.length > 0 ? navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            // Handle exact match OR prefix match for /products/:id
+            const isActive = location.pathname === item.path ||
+              (item.path !== "/dashboard" && item.path !== "/" && location.pathname.startsWith(item.path + "/"));
             return (
               <Link
                 key={item.path}
@@ -223,16 +240,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
           <div className="flex-1" />
 
-          {/* Notification */}
+          {/* Language Toggle */}
           <button
-            className="relative p-2 transition-colors"
-            style={{ color: '#849490' }}
-            onClick={() => toast({ title: "No new notifications", description: "You're all caught up." })}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#71ffe8'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#849490'; }}
+            onClick={toggleLanguage}
+            className="flex items-center gap-1.5 px-3 py-1.5 transition-colors hover:bg-muted/50 rounded-md"
+            style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}
           >
-            <Bell className="w-5 h-5" />
+            <Globe className="w-3.5 h-3.5" />
+            {i18n.language === "hi" ? "HI" : "EN"}
           </button>
+
+          {/* Notification */}
+          <NotificationsDropdown />
 
           {/* Role badge */}
           {role && (
