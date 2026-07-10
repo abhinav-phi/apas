@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { FlowButton } from "@/components/ui/flow-button";
-import { Shield, ArrowRight, Package, Truck, Users, BarChart3 } from "lucide-react";
+import { Package, Truck, Users, BarChart3 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 
 type AppRole = "manufacturer" | "supplier" | "customer" | "admin";
 
 export default function AuthPage({ initialMode = "login" }: { initialMode?: "login" | "register" }) {
+  const { t } = useTranslation();
   const [isSignUp, setIsSignUp] = useState(initialMode === "register");
   useEffect(() => { setIsSignUp(initialMode === "register"); }, [initialMode]);
 
@@ -19,11 +21,22 @@ export default function AuthPage({ initialMode = "login" }: { initialMode?: "log
   const [role, setRole] = useState<AppRole>("manufacturer");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      const t = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [cooldown]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || cooldown > 0) return;
+    
     setError("");
     setLoading(true);
     try {
@@ -33,8 +46,9 @@ export default function AuthPage({ initialMode = "login" }: { initialMode?: "log
         await signIn(email, password);
       }
       navigate("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err: unknown) {
+      setError((err as Error).message || "An error occurred");
+      setCooldown(3); // 3 seconds cooldown on failure
     } finally {
       setLoading(false);
     }
@@ -103,10 +117,10 @@ export default function AuthPage({ initialMode = "login" }: { initialMode?: "log
 
             <div className="mb-8">
               <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: '#71ffe8', fontFamily: 'IBM Plex Mono, monospace' }}>
-                {isSignUp ? "Create Account" : "Welcome Back"}
+                {isSignUp ? t("auth.create_account") : t("auth.welcome_back")}
               </p>
               <h2 className="font-headline text-2xl font-extrabold tracking-tight" style={{ color: '#dfe2eb' }}>
-                {isSignUp ? "Get Started" : "Sign In"}
+                {isSignUp ? t("auth.get_started") : t("auth.signin")}
               </h2>
             </div>
 
@@ -164,14 +178,14 @@ export default function AuthPage({ initialMode = "login" }: { initialMode?: "log
 
               <FlowButton
                 type="submit"
-                disabled={loading}
+                disabled={loading || cooldown > 0}
                 size="full"
-                text={loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
+                text={loading ? "Please wait..." : cooldown > 0 ? `Wait ${cooldown}s...` : isSignUp ? t("auth.create_account") : t("auth.signin")}
               />
             </form>
 
             <p className="text-sm text-center mt-6" style={{ color: '#849490', fontFamily: 'Geist Sans, sans-serif' }}>
-              {isSignUp ? "Already have an account?" : "Don't have an account?"}
+              {isSignUp ? t("auth.already_have_account") : t("auth.dont_have_account")}
             </p>
             <div className="flex justify-center mt-4">
               <FlowButton
