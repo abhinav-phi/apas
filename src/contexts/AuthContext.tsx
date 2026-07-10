@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 type AppRole = "manufacturer" | "supplier" | "customer" | "admin";
 
@@ -13,12 +13,17 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, role: AppRole, companyName?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Delay helper
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const isDev = import.meta.env.DEV;
+const log = (...args: unknown[]) => { if (isDev) console.log("[AuthContext]", ...args); };
+const warn = (...args: unknown[]) => { if (isDev) console.warn("[AuthContext]", ...args); };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -31,6 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Fetch user role & profile from DB.
    * Retries up to 5 times with back-off to handle the race condition where
    * the database trigger hasn't finished inserting the row yet.
+   * 
+   * NOTE: The client-side role INSERT fallback has been REMOVED for security.
+   * Roles must only be assigned by the server-side handle_new_user() trigger.
    */
   const fetchUserData = useCallback(async (userId: string, retries = 5): Promise<void> => {
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -43,46 +51,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fetchedRole = (roleRes.data?.role as AppRole) || null;
         const fetchedProfile = profileRes.data || null;
 
-        // If we got a role, great — set it and return
         if (fetchedRole) {
           setRole(fetchedRole);
           setProfile(fetchedProfile);
           return;
         }
 
-        // If no role found and we still have retries, wait and try again
-        // (the trigger may not have fired yet)
         if (attempt < retries) {
-          console.log(`[AuthContext] Role not found yet for ${userId}, retrying (${attempt + 1}/${retries})...`);
+          log(`Role not found yet for ${userId}, retrying (${attempt + 1}/${retries})...`);
           await wait(500 * (attempt + 1)); // 500ms, 1s, 1.5s, 2s, 2.5s
           continue;
         }
 
-        // All retries exhausted — try to create role from user metadata as fallback
-        console.warn(`[AuthContext] Role still not found after ${retries} retries. Attempting client-side fallback...`);
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        const metaRole = currentUser?.user_metadata?.app_role as AppRole | undefined;
-        
-        if (metaRole) {
-          // Try inserting the role ourselves (in case trigger didn't fire)
-          const { error: insertError } = await supabase
-            .from("user_roles")
-            .insert({ user_id: userId, role: metaRole });
-          
-          if (!insertError) {
-            setRole(metaRole);
-          } else {
-            // Insert may fail if row already exists — that's OK, just log
-            console.warn("[AuthContext] Fallback role insert note:", insertError.message);
-            setRole(null);
-          }
-        } else {
-          setRole(null);
-        }
+        // All retries exhausted — role will remain null (broken state)
+        warn(`Role still not found after ${retries} retries for user ${userId}. Trigger may not have fired.`);
+        setRole(null);
         setProfile(fetchedProfile);
 
       } catch (err) {
-        console.error("[AuthContext] fetchUserData error:", err);
+        if (isDev) console.error("[AuthContext] fetchUserData error:", err);
         if (attempt === retries) {
           setRole(null);
           setProfile(null);
@@ -91,33 +78,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      await fetchUserData(currentUser.id);
+    }
+  }, [fetchUserData]);
+
   useEffect(() => {
     let initialized = false;
 
-    // Get session once on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        // fetchUserData sets role+profile internally — await it fully
         await fetchUserData(session.user.id);
       }
-      // role is guaranteed to be set (or null) by now
       initialized = true;
       setLoading(false);
     });
 
-    // Listen for auth changes AFTER initial load
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!initialized) return; // skip — initial getSession handles it
+      if (!initialized) return;
 
-      // Mark loading so nothing renders with stale role
       setLoading(true);
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        // Await fully — role will be set before loading goes false
         await fetchUserData(session.user.id);
       } else {
         setRole(null);
@@ -136,42 +124,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: AppRole,
     companyName?: string
   ) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          app_role: role,          // ← trigger reads this
+          app_role: role, // trigger reads this to assign role
           company_name: companyName || null,
         },
         emailRedirectTo: window.location.origin,
       },
     });
     if (error) throw error;
-
-    if (data.user) {
-      // The database trigger (handle_new_user) will auto-create the role & profile.
-      // But as a safety net, also try client-side insert (handles cases where
-      // the trigger hasn't been set up yet, or RLS blocks the trigger).
-      try {
-        await supabase
-          .from("user_roles")
-          .insert({ user_id: data.user.id, role });
-      } catch (e) {
-        console.warn("[AuthContext] Client-side role insert note:", e);
-      }
-
-      try {
-        await supabase
-          .from("profiles")
-          .insert(
-            { user_id: data.user.id, full_name: fullName, company_name: companyName || null }
-          );
-      } catch (e) {
-        console.warn("[AuthContext] Client-side profile insert note:", e);
-      }
-    }
+    // NOTE: We do NOT insert into user_roles from client-side.
+    // The handle_new_user() trigger (SECURITY DEFINER) does it server-side.
   };
 
   const signIn = async (email: string, password: string) => {
@@ -188,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, role, profile, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, profile, loading, signUp, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
