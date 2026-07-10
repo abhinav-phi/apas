@@ -7,21 +7,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Shield,
+  Package,
+  Plus,
+  MapPin,
   Search,
+  AlertTriangle,
+  ExternalLink,
+  RefreshCw,
+  ChevronDown,
+  Clock,
   CheckCircle2,
+  User,
+  CameraOff,
+  ScanLine,
+  FileText,
+  Download,
   XCircle,
   ShieldCheck,
   ShieldAlert,
   Camera,
-  CameraOff,
   Printer,
-  ExternalLink,
+  LogOut,
+  Map as MapIcon,
+  List,
   Loader2,
-  AlertTriangle,
   RotateCcw,
-  ScanLine,
-  MapPin,
 } from "lucide-react";
+import { Html5Qrcode } from "html5-qrcode";
+import { generateProductCertificate } from "@/lib/pdf";
 import { AppFooter } from "@/components/layout/AppFooter";
 
 type VerifyResult = {
@@ -129,7 +142,7 @@ export default function Verify() {
   const [query, setQuery] = useState(initialQuery);
   const [viewState, setViewState] = useState<ViewState>("scanning");
   const [result, setResult] = useState<VerifyResult | null>(null);
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<Tables<"supply_chain_events">[]>([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeoInfo>({
@@ -138,13 +151,13 @@ export default function Verify() {
     lng: null,
   });
 
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasScannedRef = useRef(false);
   const isVerifyingRef = useRef(false);
   const handleVerifyRef = useRef<(input?: string) => Promise<void>>();
   const geoRef = useRef<GeoInfo>({ status: "idle", lat: null, lng: null });
 
-  const log = (...args: any[]) => console.log("[Verify]", ...args);
+  const log = (...args: unknown[]) => { if (import.meta.env.DEV) console.log("[Verify]", ...args); };
 
   // Keep geoRef in sync with state
   useEffect(() => {
@@ -168,13 +181,13 @@ export default function Verify() {
         await inst.stop();
         log("scanner stopped OK");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       log("stop error (safe to ignore):", e?.message);
     }
     try {
       inst.clear();
       log("scanner cleared OK");
-    } catch (e: any) {
+    } catch (e: unknown) {
       log("clear error (safe to ignore):", e?.message);
     }
   }, []);
@@ -309,7 +322,7 @@ export default function Verify() {
           log("events fetched:", evts?.length || 0);
           setEvents(evts || []);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Verification error:", err);
         setResult({
           valid: false,
@@ -356,9 +369,7 @@ export default function Verify() {
     container.innerHTML = ""; // Clear old scanner artifacts
 
     try {
-      log("importing html5-qrcode...");
-      const { Html5Qrcode } = await import("html5-qrcode");
-      log("import OK");
+      log("initializing html5-qrcode...");
 
       // ✅ Use the FULL working config from v1 (BarcodeDetector + high fps)
       const scanner = new Html5Qrcode("qr-reader", {
@@ -430,7 +441,7 @@ export default function Verify() {
           requestGeo();
         }, 1500);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       log("CAMERA ERROR:", err?.message || err);
       console.error("Full camera error:", err);
 
@@ -627,7 +638,7 @@ export default function Verify() {
                       : null,
                   ]
                     .filter(Boolean)
-                    .map((f: any) => (
+                    .map((f) => (
                       <div key={f.label}>
                         <p className="text-xs text-muted-foreground">{f.label}</p>
                         <p className="text-sm font-medium">{f.value}</p>
@@ -722,10 +733,30 @@ export default function Verify() {
               <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
               <h1 className="text-2xl font-bold text-foreground mb-1">Authentic</h1>
               <p className="text-muted-foreground mb-1">{result.message}</p>
-              <p className="text-muted-foreground/60 text-sm">
+              <p className="text-muted-foreground/60 text-sm mb-4">
                 Scanned {result.scan_count || 1} time
                 {(result.scan_count || 1) > 1 ? "s" : ""}
               </p>
+              <div className="flex justify-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2"
+                  onClick={() => {
+                    generateProductCertificate({
+                      productName: prod.name,
+                      brand: prod.brand,
+                      productCode: prod.product_code,
+                      category: prod.category,
+                      verificationHash: prod.verification_hash,
+                      trustScore,
+                      issueDate: new Date().toISOString()
+                    });
+                  }}
+                >
+                  <Download className="w-4 h-4" /> Download PDF Certificate
+                </Button>
+              </div>
             </div>
 
             {/* Trust Score */}
@@ -793,23 +824,18 @@ export default function Verify() {
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Anchored on Sepolia</p>
-                    <a
-                      href={`https://sepolia.etherscan.io/tx/${prod.blockchain_tx}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono truncate"
-                    >
-                      {prod.blockchain_tx.substring(0, 18)}...
-                      {prod.blockchain_tx.substring(
-                        prod.blockchain_tx.length - 8
-                      )}
-                      <ExternalLink className="w-3 h-3 shrink-0" />
-                    </a>
+                    <p className="text-sm font-medium">Hash Anchored (Simulated)</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate" title={prod.blockchain_tx}>
+                      {prod.blockchain_tx.substring(0, 24)}...
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                      SHA-256 fingerprint — real blockchain integration planned
+                    </p>
                   </div>
                 </div>
               </div>
             )}
+
 
             {/* Hash Chain */}
             <div className="rounded-lg p-4 border bg-card">
