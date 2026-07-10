@@ -9,16 +9,22 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { generateBatchCode } from "@/lib/hash";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Package, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { Tables } from "@/integrations/supabase/types";
 
 export default function Batches() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [batches, setBatches] = useState<any[]>([]);
+  const [batches, setBatches] = useState<Tables<"batches">[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", manufacture_date: "", expiry_date: "" });
+  
+  const [selectedBatch, setSelectedBatch] = useState<Tables<"batches"> | null>(null);
+  const [batchProducts, setBatchProducts] = useState<Tables<"products">[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
   const fetchBatches = async () => {
     const { data } = await supabase.from("batches").select("*").eq("manufacturer_id", user!.id).order("created_at", { ascending: false });
@@ -30,6 +36,15 @@ export default function Batches() {
     setLoading(true);
     fetchBatches().finally(() => setLoading(false));
   }, []);
+
+  const handleRowClick = async (batch: Tables<"batches">) => {
+    setSelectedBatch(batch);
+    setBatchProducts([]);
+    setLoadingProducts(true);
+    const { data } = await supabase.from("products").select("*").eq("batch_id", batch.id).order("created_at", { ascending: false });
+    if (data) setBatchProducts(data);
+    setLoadingProducts(false);
+  };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -110,7 +125,11 @@ export default function Batches() {
                 ) : (
                   <>
                     {batches.map((b) => (
-                      <tr key={b.id} className="hover:bg-muted/30 transition-colors">
+                      <tr 
+                        key={b.id} 
+                        className="hover:bg-muted/30 transition-colors cursor-pointer"
+                        onClick={() => handleRowClick(b)}
+                      >
                         <td className="px-4 py-3 flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center"><FileText className="w-4 h-4 text-primary" /></div>
                           <span className="text-sm font-medium">{b.name}</span>
@@ -129,6 +148,71 @@ export default function Batches() {
             </table>
           </div>
         </div>
+
+        <Dialog open={!!selectedBatch} onOpenChange={(open) => !open && setSelectedBatch(null)}>
+          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" /> 
+                Batch Details: {selectedBatch?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Batch Code</p>
+                  <p className="font-mono text-sm">{selectedBatch?.batch_code}</p>
+                </div>
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Products Count</p>
+                  <p className="font-semibold text-sm">{selectedBatch?.product_count}</p>
+                </div>
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Created</p>
+                  <p className="text-sm">{selectedBatch ? new Date(selectedBatch.created_at).toLocaleDateString() : ''}</p>
+                </div>
+              </div>
+
+              {loadingProducts ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center justify-between">
+                    <span>Products in Batch</span>
+                    <span className="text-xs text-muted-foreground font-normal bg-muted px-2 py-1 rounded-md">
+                      {batchProducts.length} items
+                    </span>
+                  </h3>
+                  {batchProducts.length === 0 ? (
+                    <div className="text-center py-8 bg-muted/20 rounded-xl border border-border border-dashed">
+                      <p className="text-sm text-muted-foreground">No products registered in this batch yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {batchProducts.map(p => (
+                        <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+                              <Package className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{p.name}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{p.product_code}</p>
+                            </div>
+                          </div>
+                          <StatusBadge status={p.is_flagged ? "suspicious" : p.status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
