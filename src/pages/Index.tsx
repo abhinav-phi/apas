@@ -101,7 +101,7 @@ export default function Index() {
               style={{ color: '#849490', fontFamily: 'Geist Sans, sans-serif', lineHeight: 1.7 }}
             >
               End-to-end product authentication with tamper-resistant tracking,
-              real-time fraud detection, and instant QR verification anchored on Sepolia.
+              real-time fraud detection, and instant QR verification with SHA-256 hash anchoring.
             </p>
 
             <div className="flex items-center justify-center gap-4 mt-4">
