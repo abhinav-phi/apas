@@ -97,30 +97,80 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          link_url: string | null
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link_url?: string | null
+          message: string
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link_url?: string | null
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ownership_transfers: {
         Row: {
           created_at: string
           from_user_id: string | null
           id: string
+          notes: string | null
           product_id: string
+          status: string
           to_user_id: string
           transfer_hash: string
+          transfer_type: string
         }
         Insert: {
           created_at?: string
           from_user_id?: string | null
           id?: string
+          notes?: string | null
           product_id: string
+          status?: string
           to_user_id: string
           transfer_hash: string
+          transfer_type?: string
         }
         Update: {
           created_at?: string
           from_user_id?: string | null
           id?: string
+          notes?: string | null
           product_id?: string
+          status?: string
           to_user_id?: string
           transfer_hash?: string
+          transfer_type?: string
         }
         Relationships: [
           {
@@ -143,6 +193,7 @@ export type Database = {
           expiry_date: string | null
           flag_reason: string | null
           id: string
+          image_url: string | null
           is_claimed: boolean
           is_flagged: boolean
           manufacture_date: string | null
@@ -169,6 +220,7 @@ export type Database = {
           expiry_date?: string | null
           flag_reason?: string | null
           id?: string
+          image_url?: string | null
           is_claimed?: boolean
           is_flagged?: boolean
           manufacture_date?: string | null
@@ -195,6 +247,7 @@ export type Database = {
           expiry_date?: string | null
           flag_reason?: string | null
           id?: string
+          image_url?: string | null
           is_claimed?: boolean
           is_flagged?: boolean
           manufacture_date?: string | null
@@ -389,6 +442,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      transfer_product_ownership: {
+        Args: {
+          p_product_id: string
+          p_to_email: string
+          p_transfer_type?: string
+          p_notes?: string
+        }
+        Returns: Json
       }
       verify_product_secure: {
         Args: {
