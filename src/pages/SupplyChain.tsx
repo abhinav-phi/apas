@@ -4,13 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SupplyChainTimeline } from "@/components/ui/timeline";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck } from "lucide-react";
+import { Truck, Map as MapIcon, List } from "lucide-react";
+import { SupplyChainMap } from "@/components/ui/SupplyChainMap";
+import type { Tables } from "@/integrations/supabase/types";
 
 export default function SupplyChain() {
   const { user, role } = useAuth();
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Pick<Tables<"products">, "id" | "name" | "product_code">[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<Tables<"supply_chain_events">[]>([]);
+  const [viewMode, setViewMode] = useState<"timeline" | "map">("timeline");
 
   useEffect(() => {
     document.title = "Supply Chain — AuthentiChain";
@@ -46,18 +49,43 @@ export default function SupplyChain() {
           <p className="text-sm text-muted-foreground mt-1">Track product journey through the supply chain</p>
         </div>
 
-        <div className="max-w-sm">
-          <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-            <SelectTrigger><SelectValue placeholder="Select a product..." /></SelectTrigger>
-            <SelectContent>
-              {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.product_code})</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="max-w-sm w-full">
+            <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+              <SelectTrigger><SelectValue placeholder="Select a product..." /></SelectTrigger>
+              <SelectContent>
+                {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.product_code})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex bg-muted/50 p-1 rounded-lg border border-border">
+            <button
+              onClick={() => setViewMode("timeline")}
+              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === "timeline" ? "bg-accent text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="w-3.5 h-3.5 mr-1.5" /> Timeline
+            </button>
+            <button
+              onClick={() => setViewMode("map")}
+              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === "map" ? "bg-accent text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5 mr-1.5" /> Map View
+            </button>
+          </div>
         </div>
 
         <div className="bg-card rounded-xl border border-border p-6 shadow-card">
           {events.length > 0 ? (
-            <SupplyChainTimeline events={events} />
+            viewMode === "timeline" ? (
+              <SupplyChainTimeline events={events} />
+            ) : (
+              <SupplyChainMap events={events} />
+            )
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <Truck className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
