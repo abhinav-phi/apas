@@ -1,45 +1,65 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SupplyChainTimeline } from "@/components/ui/timeline";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Truck, Map as MapIcon, List } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Truck, Map as MapIcon, List, Loader2 } from "lucide-react";
 import { SupplyChainMap } from "@/components/ui/SupplyChainMap";
+import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 
 export default function SupplyChain() {
   const { user, role } = useAuth();
+  const { toast } = useToast();
   const [products, setProducts] = useState<Pick<Tables<"products">, "id" | "name" | "product_code">[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [events, setEvents] = useState<Tables<"supply_chain_events">[]>([]);
   const [viewMode, setViewMode] = useState<"timeline" | "map">("timeline");
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  const fetchProducts = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      if (role === "supplier") {
+        // Get only products this supplier has interacted with
+        const { data: eventData, error: eventErr } = await supabase.from("supply_chain_events").select("product_id").eq("actor_id", user.id);
+        if (eventErr) throw eventErr;
+        if (eventData && eventData.length > 0) {
+          const productIds = [...new Set(eventData.map(e => e.product_id))];
+          const { data, error } = await supabase.from("products").select("id, name, product_code").in("id", productIds).order("created_at", { ascending: false });
+          if (error) throw error;
+          if (data) setProducts(data);
+        } else {
+          setProducts([]);
+        }
+      } else {
+        const { data, error } = await supabase.from("products").select("id, name, product_code").order("created_at", { ascending: false });
+        if (error) throw error;
+        if (data) setProducts(data);
+      }
+    } catch (err) {
+      toast({ title: "Could not load products", description: (err as Error).message, variant: "destructive" });
+    }
+  }, [user?.id, role, toast]);
 
   useEffect(() => {
     document.title = "Supply Chain — AuthentiChain";
-    const fetchProducts = async () => {
-      if (role === "supplier") {
-        // Get only products this supplier has interacted with
-        const { data: eventData } = await supabase.from("supply_chain_events").select("product_id").eq("actor_id", user!.id);
-        if (eventData && eventData.length > 0) {
-          const productIds = [...new Set(eventData.map(e => e.product_id))];
-          const { data } = await supabase.from("products").select("id, name, product_code").in("id", productIds).order("created_at", { ascending: false });
-          if (data) setProducts(data);
-        }
-      } else {
-        const { data } = await supabase.from("products").select("id, name, product_code").order("created_at", { ascending: false });
-        if (data) setProducts(data);
-      }
-    };
     fetchProducts();
-  }, []);
+  }, [fetchProducts]);
 
   useEffect(() => {
-    if (!selectedProduct) { setEvents([]); return; }
-    supabase.from("supply_chain_events").select("*").eq("product_id", selectedProduct).order("created_at", { ascending: true }).then(({ data }) => {
+    if (!selectedProduct) { setEvents([]); setLoadingEvents(false); return; }
+    setLoadingEvents(true);
+    supabase.from("supply_chain_events").select("*").eq("product_id", selectedProduct).order("created_at", { ascending: true }).then(({ data, error }) => {
+      if (error) {
+        toast({ title: "Could not load events", description: error.message, variant: "destructive" });
+      }
       if (data) setEvents(data);
+      setLoadingEvents(false);
     });
-  }, [selectedProduct]);
+  }, [selectedProduct, toast]);
 
   return (
     <DashboardLayout>
@@ -80,7 +100,13 @@ export default function SupplyChain() {
         </div>
 
         <div className="bg-card rounded-xl border border-border p-6 shadow-card">
-          {events.length > 0 ? (
+          {loadingEvents ? (
+            <div className="space-y-3">
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+            </div>
+          ) : events.length > 0 ? (
             viewMode === "timeline" ? (
               <SupplyChainTimeline events={events} />
             ) : (
