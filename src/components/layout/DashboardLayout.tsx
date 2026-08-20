@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { FlowButton } from "@/components/ui/flow-button";
 import { NotificationsDropdown } from "./NotificationsDropdown";
+import { WalletButton } from "./WalletButton";
 
 const SETTINGS_ITEM = { label: "Settings", path: "/settings", icon: <Settings className="w-4 h-4" /> };
 
@@ -68,7 +69,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const navItems = role ? roleNavItems[role] || [] : [];
   
   const toggleLanguage = () => {
@@ -175,12 +176,16 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
           {/* User row */}
           <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-8 h-8 flex items-center justify-center text-xs font-bold"
-              style={{ background: 'rgba(113,255,232,0.1)', color: '#71ffe8', fontFamily: 'IBM Plex Mono, monospace' }}
-            >
-              {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Avatar" className="w-8 h-8 rounded-sm object-cover shrink-0" />
+            ) : (
+              <div
+                className="w-8 h-8 flex items-center justify-center text-xs font-bold"
+                style={{ background: 'rgba(113,255,232,0.1)', color: '#71ffe8', fontFamily: 'IBM Plex Mono, monospace' }}
+              >
+                {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate" style={{ color: '#dfe2eb', fontFamily: 'Geist Sans, sans-serif' }}>
                 {profile?.full_name || "User"}
@@ -249,6 +254,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <Globe className="w-3.5 h-3.5" />
             {i18n.language === "hi" ? "HI" : "EN"}
           </button>
+
+          {/* Wallet connection (Sepolia anchoring) */}
+          <WalletButton />
 
           {/* Notification */}
           <NotificationsDropdown />
