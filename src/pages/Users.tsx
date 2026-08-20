@@ -3,10 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { Users, RefreshCw } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
+import { Users, RefreshCw, Search, ChevronLeft, ChevronRight } from "lucide-react";
+
+const PAGE_SIZE = 25;
 
 const ROLE_COLORS: Record<string, string> = {
   manufacturer: "text-blue-400 bg-blue-400/10",
@@ -30,33 +40,66 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("*, user_roles(role)")
-      .order("created_at", { ascending: false });
+    let query = supabase.from("profiles").select("*, user_roles(role)", { count: "exact" }).order("created_at", { ascending: false });
 
-    if (data) {
+    if (roleFilter !== "all") {
+      query = query.filter("user_roles.role", "eq", roleFilter);
+    }
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, count, error } = await query.range(from, to);
+
+    if (error) {
+      toast({ title: "Error loading users", description: error.message, variant: "destructive" });
+      setUsers([]);
+    } else if (data) {
+      const mapped = data.map((u) => ({
+        id: u.id,
+        user_id: u.user_id,
+        full_name: u.full_name || "Unknown",
+        company_name: u.company_name || null,
+        created_at: u.created_at,
+        role: String((u.user_roles as unknown as Array<{ role: string }> | null)?.[0]?.role ?? "customer"),
+      }));
+
+      const q = debouncedSearch.trim().toLowerCase();
       setUsers(
-        data.map((u) => ({
-          id: u.id,
-          user_id: u.user_id,
-          full_name: u.full_name || "Unknown",
-          company_name: u.company_name || null,
-          created_at: u.created_at,
-          role: u.user_roles?.[0]?.role || "customer",
-        }))
+        q
+          ? mapped.filter(
+              (u) =>
+                u.full_name.toLowerCase().includes(q) ||
+                (u.company_name ?? "").toLowerCase().includes(q) ||
+                u.user_id.toLowerCase().includes(q)
+            )
+          : mapped
       );
+      setTotalCount(count ?? 0);
     }
     setLoading(false);
-  }, []);
+  }, [page, roleFilter, debouncedSearch, toast]);
 
   useEffect(() => {
     document.title = "Users — AuthentiChain";
+  }, []);
+
+  useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, roleFilter]);
 
   const handleRoleChange = async (targetUserId: string, newRole: string) => {
     if (targetUserId === currentUser?.id) {
@@ -73,12 +116,12 @@ export default function UsersPage() {
     if (error) {
       toast({ title: "Error changing role", description: error.message, variant: "destructive" });
     } else {
-      const result = data as { success: boolean; error?: string };
-      if (result.success) {
+      const result = data as unknown as { success?: boolean; error?: string };
+      if (result.success !== false) {
         toast({ title: "Role updated", description: `User role changed to ${newRole}` });
         fetchUsers();
       } else {
-        toast({ title: "Role change failed", description: result.error, variant: "destructive" });
+        toast({ title: "Role change failed", description: result?.error, variant: "destructive" });
       }
     }
     setUpdatingId(null);
@@ -102,11 +145,39 @@ export default function UsersPage() {
           </Button>
         </div>
 
-        <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
+        {/* Search + filter row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#5a6a66" }} />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, company or user id..."
+              className="pl-9"
+            />
+          </div>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-[160px] h-10">
+              <SelectValue placeholder="All roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              <SelectItem value="manufacturer">Manufacturer</SelectItem>
+              <SelectItem value="supplier">Supplier</SelectItem>
+              <SelectItem value="customer">Customer</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-xs" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+            {totalCount} user{totalCount === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="rounded-xl border overflow-hidden" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border" style={{ background: "#0a0e14" }}>
+                <tr className="border-b" style={{ background: "#0a0e14", borderColor: "rgba(113,255,232,0.1)" }}>
                   {["User", "Company", "Role", "Joined", "Actions"].map((h) => (
                     <th key={h} className="text-left text-xs font-medium px-4 py-3" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>
                       {h}
@@ -114,9 +185,9 @@ export default function UsersPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y" style={{ borderColor: "rgba(113,255,232,0.06)" }}>
                 {loading
-                  ? Array.from({ length: 5 }).map((_, i) => (
+                  ? Array.from({ length: Math.min(8, PAGE_SIZE) }).map((_, i) => (
                       <tr key={i}>
                         <td className="px-4 py-3"><Skeleton className="h-8 w-40" /></td>
                         <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
@@ -162,26 +233,21 @@ export default function UsersPage() {
                             {isCurrentUser ? (
                               <span className="text-xs" style={{ color: "#5a6a66" }}>—</span>
                             ) : (
-                              <div className="flex items-center gap-2">
-                                <Select
-                                  value={u.role}
-                                  onValueChange={(v) => handleRoleChange(u.user_id, v)}
-                                  disabled={updatingId === u.user_id}
-                                >
-                                  <SelectTrigger className="h-7 text-xs w-[130px]">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="manufacturer">Manufacturer</SelectItem>
-                                    <SelectItem value="supplier">Supplier</SelectItem>
-                                    <SelectItem value="customer">Customer</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                {updatingId === u.user_id && (
-                                  <span className="text-xs" style={{ color: "#849490" }}>saving...</span>
-                                )}
-                              </div>
+                              <Select
+                                value={u.role}
+                                onValueChange={(v) => handleRoleChange(u.user_id, v)}
+                                disabled={updatingId === u.user_id}
+                              >
+                                <SelectTrigger className="h-7 text-xs w-[130px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="manufacturer">Manufacturer</SelectItem>
+                                  <SelectItem value="supplier">Supplier</SelectItem>
+                                  <SelectItem value="customer">Customer</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
                             )}
                           </td>
                         </tr>
@@ -192,12 +258,55 @@ export default function UsersPage() {
                     <td colSpan={5} className="text-center py-12">
                       <Users className="w-10 h-10 mx-auto mb-2" style={{ color: "rgba(132,148,144,0.4)" }} />
                       <p className="text-sm" style={{ color: "#849490" }}>No users found</p>
+                      <p className="text-xs mt-1" style={{ color: "#5a6a66" }}>
+                        {debouncedSearch || roleFilter !== "all"
+                          ? "Try adjusting your search or role filter."
+                          : "Users appear here after they sign up."}
+                      </p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "rgba(113,255,232,0.06)" }}>
+              <span className="text-xs" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }).slice(0, 10).map((_, i) => (
+                  <Button
+                    key={i}
+                    variant={page === i + 1 ? "default" : "outline"}
+                    size="sm"
+                    className="w-8"
+                    onClick={() => setPage(i + 1)}
+                  >
+                    {i + 1}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
