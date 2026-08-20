@@ -63,7 +63,7 @@ export default function Alerts() {
     if (sevFilter !== "all") query = query.eq("severity", sevFilter);
 
     // Manufacturer only sees their own products' alerts
-    if (role === "manufacturer" && user) {
+    if (role === "manufacturer" && user?.id) {
       const { data: myProductIds } = await supabase
         .from("products")
         .select("id")
@@ -88,9 +88,11 @@ export default function Alerts() {
       setAlerts(rows);
       setTotalCount(count || 0);
       setPage(targetPage);
+    } else if (error) {
+      toast({ title: "Could not load alerts", description: error.message, variant: "destructive" });
     }
     setLoading(false);
-  }, [user, role]);
+  }, [user?.id, role, toast]);
 
   useEffect(() => {
     document.title = "Alerts — AuthentiChain";
@@ -99,7 +101,7 @@ export default function Alerts() {
 
   const resolveAlert = async (id: string, productId: string) => {
     setResolving(id);
-    const [alertRes] = await Promise.all([
+    const [alertRes, productRes] = await Promise.all([
       supabase.from("fraud_alerts").update({
         is_resolved: true,
         resolved_at: new Date().toISOString(),
@@ -111,7 +113,11 @@ export default function Alerts() {
     if (alertRes.error) {
       toast({ title: "Error", description: alertRes.error.message, variant: "destructive" });
     } else {
-      toast({ title: "Alert resolved" });
+      if (productRes.error) {
+        toast({ title: "Alert resolved", description: "Product flag could not be cleared: " + productRes.error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Alert resolved" });
+      }
       fetchAlerts(page, debouncedSearch, filter, severityFilter);
     }
     setResolving(null);
