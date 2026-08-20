@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { FlowButton } from "@/components/ui/flow-button";
-import { Package, Truck, Users, BarChart3 } from "lucide-react";
+import { Package, Truck, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
@@ -54,11 +54,12 @@ export default function AuthPage({ initialMode = "login" }: { initialMode?: "log
     }
   };
 
-  const roles: { value: AppRole; label: string; icon: typeof Package; desc: string }[] = [
+  // Rules: admin role is never offered at signup — it can only be granted
+  // by an existing admin via admin_change_role RPC.
+  const roles: { value: "manufacturer" | "supplier" | "customer"; label: string; icon: typeof Package; desc: string }[] = [
     { value: "manufacturer", label: "Manufacturer", icon: Package, desc: "Register & manage products" },
     { value: "supplier", label: "Supplier", icon: Truck, desc: "Track & distribute products" },
     { value: "customer", label: "Customer", icon: Users, desc: "Verify product authenticity" },
-    { value: "admin", label: "Admin", icon: BarChart3, desc: "Monitor & audit system" },
   ];
 
   const baseInputStyle: React.CSSProperties = {
