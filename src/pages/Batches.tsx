@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { generateBatchCode } from "@/lib/hash";
-import { FileText, Plus, Package, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
+import { FileText, Plus, Package, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Tables } from "@/integrations/supabase/types";
@@ -25,23 +25,32 @@ export default function Batches() {
   const [selectedBatch, setSelectedBatch] = useState<Tables<"batches"> | null>(null);
   const [batchProducts, setBatchProducts] = useState<Tables<"products">[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const fetchBatches = async () => {
-    const { data } = await supabase.from("batches").select("*").eq("manufacturer_id", user!.id).order("created_at", { ascending: false });
+  const fetchBatches = useCallback(async () => {
+    if (!user?.id) return;
+    const { data, error } = await supabase.from("batches").select("*").eq("manufacturer_id", user.id).order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Could not load batches", description: error.message, variant: "destructive" });
+      return;
+    }
     if (data) setBatches(data);
-  };
+  }, [user?.id, toast]);
 
   useEffect(() => {
     document.title = "Batches — AuthentiChain";
     setLoading(true);
     fetchBatches().finally(() => setLoading(false));
-  }, []);
+  }, [fetchBatches]);
 
   const handleRowClick = async (batch: Tables<"batches">) => {
     setSelectedBatch(batch);
     setBatchProducts([]);
     setLoadingProducts(true);
-    const { data } = await supabase.from("products").select("*").eq("batch_id", batch.id).order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("products").select("*").eq("batch_id", batch.id).order("created_at", { ascending: false });
+    if (error) {
+      toast({ title: "Could not load batch products", description: error.message, variant: "destructive" });
+    }
     if (data) setBatchProducts(data);
     setLoadingProducts(false);
   };
@@ -99,6 +108,10 @@ export default function Batches() {
               </form>
             </DialogContent>
           </Dialog>
+        <div className="relative max-w-sm w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Search batches by name or code..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
         </div>
 
         <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
@@ -124,7 +137,12 @@ export default function Batches() {
                   ))
                 ) : (
                   <>
-                    {batches.map((b) => (
+                    {batches
+                      .filter((b) =>
+                        b.name.toLowerCase().includes(search.toLowerCase()) ||
+                        b.batch_code.toLowerCase().includes(search.toLowerCase())
+                      )
+                      .map((b) => (
                       <tr 
                         key={b.id} 
                         className="hover:bg-muted/30 transition-colors cursor-pointer"
@@ -139,8 +157,11 @@ export default function Batches() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))}
-                    {batches.length === 0 && (
-                      <tr><td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">No batches yet</td></tr>
+                    {batches.filter((b) =>
+                      b.name.toLowerCase().includes(search.toLowerCase()) ||
+                      b.batch_code.toLowerCase().includes(search.toLowerCase())
+                    ).length === 0 && (
+                      <tr><td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">{search ? "No batches match your search" : "No batches yet"}</td></tr>
                     )}
                   </>
                 )}
