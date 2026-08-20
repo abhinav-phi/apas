@@ -52,30 +52,32 @@ export default function TransferOwnership() {
   });
 
   const fetchProducts = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     setLoadingProds(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .select("id, name, product_code, brand, status, category, image_url, is_flagged")
       .eq("manufacturer_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false });
+    if (error) toast({ title: "Could not load products", description: error.message, variant: "destructive" });
     if (data) setProducts(data as Product[]);
     setLoadingProds(false);
-  }, [user]);
+  }, [user?.id, toast]);
 
   const fetchTransfers = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     setLoadingTx(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("ownership_transfers")
       .select("*, products(name, product_code)")
       .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`)
       .order("created_at", { ascending: false })
       .limit(20);
+    if (error) toast({ title: "Could not load transfers", description: error.message, variant: "destructive" });
     if (data) setTransfers(data as unknown as TransferRow[]);
     setLoadingTx(false);
-  }, [user]);
+  }, [user?.id, toast]);
 
   useEffect(() => {
     document.title = "Transfer Ownership — AuthentiChain";
