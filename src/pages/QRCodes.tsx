@@ -9,7 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function QRCodes() {
   const { user } = useAuth();
-  const [products, setProducts] = useState<Tables<"products">[]>([]);
+  interface QrProduct {
+    id: string;
+    name: string;
+    product_code: string;
+    brand: string;
+  }
+  const [products, setProducts] = useState<QrProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -17,19 +23,25 @@ export default function QRCodes() {
     `${window.location.origin}/verify?code=${productCode}`;
 
   useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
     document.title = "QR Codes — AuthentiChain";
     const fetchProducts = async () => {
       setLoading(true);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("products")
         .select("id, name, product_code, brand")
-        .eq("manufacturer_id", user!.id)
+        .eq("manufacturer_id", userId)
         .order("created_at", { ascending: false });
-      if (data) setProducts(data);
+      if (error) {
+        setProducts([]);
+      } else if (data) {
+        setProducts(data);
+      }
       setLoading(false);
     };
     fetchProducts();
-  }, [user]);
+  }, [user?.id]);
 
   const downloadQR = (productCode: string, productName: string) => {
     const canvas = document.getElementById(
