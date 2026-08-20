@@ -47,7 +47,7 @@ export default function AuditLogs() {
     const from = (targetPage - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    let query = supabase
+    const query = supabase
       .from("supply_chain_events")
       .select("*, products(name, product_code)", { count: "exact" })
       .order("created_at", { ascending: false })
@@ -70,9 +70,11 @@ export default function AuditLogs() {
       setEvents(filtered);
       setTotalCount(count || 0);
       setPage(targetPage);
+    } else if (error) {
+      toast({ title: "Could not load audit logs", description: error.message, variant: "destructive" });
     }
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     document.title = "Audit Logs — AuthentiChain";
