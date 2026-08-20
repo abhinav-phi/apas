@@ -1,8 +1,10 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+type TableName = "products" | "batches" | "fraud_alerts" | "notifications" | "ownership_transfers" | "profiles" | "scan_logs" | "supply_chain_events" | "user_roles" | "wallet_addresses" | "daily_stats";
+
 interface UsePaginationOptions {
-  table: string;
+  table: TableName;
   pageSize?: number;
   select?: string;
   orderBy?: { column: string; ascending?: boolean };
@@ -22,7 +24,7 @@ interface UsePaginationResult<T> {
   refresh: () => void;
 }
 
-export function usePagination<T = Record<string, unknown>>({
+export function usePagination<T>({
   table,
   pageSize = 25,
   select = "*",
@@ -49,7 +51,7 @@ export function usePagination<T = Record<string, unknown>>({
         .from(table)
         .select(select, { count: "exact" })
         .order(orderBy.column, { ascending: orderBy.ascending ?? false })
-        .range(from, to);
+        .range(from, to) as ReturnType<typeof supabase.from>;
 
       // Apply filters
       for (const [key, value] of Object.entries(filters)) {
@@ -63,12 +65,13 @@ export function usePagination<T = Record<string, unknown>>({
       if (err) {
         setError(err.message);
       } else {
-        setData((rows as T[]) || []);
+        setData((rows as unknown as T[]) || []);
         setTotalCount(count || 0);
         setPage(targetPage);
       }
       setIsLoading(false);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [table, pageSize, select, orderBy.column, orderBy.ascending, JSON.stringify(filters)]
   );
 
@@ -85,7 +88,7 @@ export function usePagination<T = Record<string, unknown>>({
   const goToPage = useCallback(
     (n: number) => {
       const clamped = Math.max(1, Math.min(n, totalPages));
-      fetch(clamped);
+      void fetch(clamped);
     },
     [totalPages, fetch]
   );
