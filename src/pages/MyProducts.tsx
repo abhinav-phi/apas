@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Package, Shield, ExternalLink, RefreshCw, Clock, QrCode } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductWithScan {
   id: string;
@@ -24,21 +25,27 @@ interface ProductWithScan {
 
 export default function MyProducts() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [products, setProducts] = useState<ProductWithScan[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchProducts = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     setLoading(true);
 
     // Get scan logs for this user, with product info
-    const { data: scanLogs } = await supabase
+    const { data: scanLogs, error } = await supabase
       .from("scan_logs")
       .select("product_id, created_at, products(id, name, brand, product_code, is_flagged, status, trust_score, category, created_at)")
       .eq("scanner_id", user.id)
       .eq("is_suspicious", false)
       .order("created_at", { ascending: false });
 
+    if (error) {
+      toast({ title: "Could not load your products", description: error.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     if (!scanLogs) { setLoading(false); return; }
 
     // Aggregate by product
@@ -59,10 +66,14 @@ export default function MyProducts() {
     }
 
     // Also include products transferred to this user
-    const { data: transfers } = await supabase
+    const { data: transfers, error: transfersError } = await supabase
       .from("ownership_transfers")
       .select("products(id, name, brand, product_code, is_flagged, status, trust_score, category, created_at)")
       .eq("to_user_id", user.id);
+
+    if (transfersError) {
+      toast({ title: "Could not load transfers", description: transfersError.message, variant: "destructive" });
+    }
 
     if (transfers) {
       for (const t of transfers) {
@@ -74,7 +85,7 @@ export default function MyProducts() {
 
     setProducts(Array.from(productMap.values()));
     setLoading(false);
-  }, [user]);
+  }, [user?.id, toast]);
 
   useEffect(() => {
     document.title = "My Products — AuthentiChain";
