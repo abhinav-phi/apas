@@ -18,17 +18,24 @@ export function NotificationsDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // Initial fetch
     const fetchNotifications = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(20);
+
+      if (error) {
+        toast({ title: "Could not load notifications", description: error.message, variant: "destructive" });
+        return;
+      }
 
       if (data) {
         setNotifications(data as NotificationRow[]);
@@ -41,7 +48,7 @@ export function NotificationsDropdown() {
     const channel = supabase.channel('schema-db-changes')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
           const newNotif = payload.new as NotificationRow;
           setNotifications(prev => [newNotif, ...prev].slice(0, 20));
@@ -58,16 +65,17 @@ export function NotificationsDropdown() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, toast]);
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
-    if (isOpen && unreadCount > 0) {
+    if (isOpen && unreadCount > 0 && userId) {
       // Mark all as read locally instantly
       setUnreadCount(0);
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       // Update DB in background
-      supabase.from("notifications").update({ is_read: true }).eq("user_id", user!.id).eq("is_read", false).then();
+      supabase.from("notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false).then();
     }
   };
 
@@ -98,8 +106,9 @@ export function NotificationsDropdown() {
           {notifications.length > 0 && (
             <button
               onClick={() => {
+                if (!userId) return;
                 setNotifications([]);
-                supabase.from("notifications").delete().eq("user_id", user!.id).then();
+                supabase.from("notifications").delete().eq("user_id", userId).then();
               }}
               className="text-xs hover:underline"
               style={{ color: "#849490" }}
