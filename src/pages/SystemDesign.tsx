@@ -24,7 +24,8 @@ const rbacMatrix = [
 ];
 
 const fraudRules = [
-  { rule: "Rapid Scans", desc: "Flags products scanned more than 50 times — indicates possible cloning or scanning abuse.", severity: "Medium" },
+  { rule: "Clone Detection", desc: "Flags products scanned more than 10 times total — indicates possible cloning or counterfeit copies in circulation.", severity: "Medium" },
+  { rule: "Rapid Scans", desc: "Flags products scanned more than 5 times within 5 minutes — scanning abuse by a single user.", severity: "Medium" },
   { rule: "Location Mismatch", desc: "Detects when a product appears at a location inconsistent with its supply chain path.", severity: "High" },
   { rule: "Invalid Sequence", desc: "Flags state transitions that violate the δ-notation table (e.g., manufactured → delivered).", severity: "High" },
   { rule: "Manual Flag", desc: "Allows admin/manufacturer to manually flag a product and raise a fraud alert.", severity: "High" },
