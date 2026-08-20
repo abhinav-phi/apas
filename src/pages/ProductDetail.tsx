@@ -12,9 +12,10 @@ import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import {
   ArrowLeft, Package, Shield, AlertTriangle, CheckCircle2,
-  Download, Copy, CheckCircle, MapPin, ArrowRight
+  Download, Copy, CheckCircle, MapPin, ArrowRight, ExternalLink
 } from "lucide-react";
 import { ProductImageUpload } from "@/components/ui/product-image-upload";
+import { etherscanTxUrl } from "@/lib/blockchain";
 
 interface ScanLog {
   id: string;
@@ -226,15 +227,31 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            {/* Blockchain TX */}
+            {/* Blockchain TX — honest link: Etherscan only once confirmed */}
             {product.blockchain_tx && (
               <div className="pt-3 border-t border-border">
                 <p className="text-xs mb-1" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>Hash Anchor</p>
-                <span className="text-xs font-mono truncate block" style={{ color: "#849490" }}>
-                  {product.blockchain_tx.substring(0, 24)}...
-                </span>
+                {product.blockchain_tx_status === "confirmed" ? (
+                  <a
+                    href={etherscanTxUrl(product.blockchain_tx)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-mono flex items-center gap-1 hover:underline"
+                    style={{ color: "#71ffe8" }}
+                  >
+                    {product.blockchain_tx.substring(0, 24)}... <ExternalLink className="w-3 h-3" />
+                  </a>
+                ) : (
+                  <span className="text-xs font-mono truncate block" style={{ color: "#849490" }}>
+                    {product.blockchain_tx.substring(0, 24)}...
+                  </span>
+                )}
                 <p className="text-xs mt-0.5" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
-                  (Local off-chain anchor)
+                  {product.blockchain_tx_status === "confirmed"
+                    ? "Confirmed on Sepolia (Ethereum testnet) — verified on-chain"
+                    : product.blockchain_tx_status === "failed"
+                    ? "Transaction reverted on-chain"
+                    : "Anchor pending on-chain confirmation"}
                 </p>
               </div>
             )}
