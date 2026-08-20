@@ -42,7 +42,7 @@ const CosmicParallaxBg: React.FC<CosmicParallaxBgProps> = ({
   
   // Generate random star positions
   const generateStarBoxShadow = (count: number): string => {
-    let shadows = [];
+    const shadows: string[] = [];
     
     for (let i = 0; i < count; i++) {
       const x = Math.floor(Math.random() * 2000);
