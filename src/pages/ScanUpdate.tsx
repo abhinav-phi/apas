@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -8,18 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { generateEventHash } from "@/lib/hash";
 import { Send, QrCode, X, MapPin, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Html5Qrcode } from "html5-qrcode";
-
-const VALID_SEQUENCES: Record<string, string[]> = {
-  manufactured: ["shipped", "in_transit"],
-  shipped: ["in_transit", "received"],
-  in_transit: ["received", "delivered"],
-  received: ["shipped", "in_transit", "delivered", "sold"],
-  delivered: ["sold"],
-};
 
 const EVENT_LABELS: Record<string, string> = {
   in_transit: "In Transit",
@@ -29,7 +19,6 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 export default function ScanUpdate() {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [productCode, setProductCode] = useState("");
   const [eventType, setEventType] = useState("in_transit");
@@ -122,11 +111,21 @@ export default function ScanUpdate() {
     setSuccess(false);
 
     let product = null;
-    const { data: p1 } = await supabase.from("products").select("id, product_code").eq("product_code", productCode.trim()).maybeSingle();
+    const { data: p1, error: err1 } = await supabase.from("products").select("id, product_code").eq("product_code", productCode.trim()).maybeSingle();
     product = p1;
-    if (!product) {
-      const { data: p2 } = await supabase.from("products").select("id, product_code").eq("qr_data", productCode.trim()).maybeSingle();
+    if (!product && !err1) {
+      const { data: p2, error: err2 } = await supabase.from("products").select("id, product_code").eq("qr_data", productCode.trim()).maybeSingle();
       product = p2;
+      if (err2) {
+        toast({ title: "Lookup failed", description: err2.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+    }
+    if (err1) {
+      toast({ title: "Lookup failed", description: err1.message, variant: "destructive" });
+      setLoading(false);
+      return;
     }
 
     if (!product) {
@@ -135,62 +134,40 @@ export default function ScanUpdate() {
       return;
     }
 
-    const { data: lastEvent } = await supabase
-      .from("supply_chain_events")
-      .select("event_hash, event_type")
-      .eq("product_id", product.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const ts = new Date().toISOString();
-    const eventHash = generateEventHash({
-      productId: product.id,
-      eventType,
-      actorId: user!.id,
-      timestamp: ts,
-      previousHash: lastEvent?.event_hash,
+    // Server-side RPC: state-machine validation, custody check, hash-chain
+    // computation and serialization all happen in record_supply_chain_event()
+    // (Rules R16/R17 — client-computed hashes are discarded)
+    const { data: rpcData, error: rpcError } = await supabase.rpc("record_supply_chain_event", {
+      p_product_id: product.id,
+      p_event_type: eventType,
+      p_location: location || null,
+      p_latitude: lat,
+      p_longitude: lng,
+      p_notes: notes || null,
     });
 
-    // Sequence validation
-    if (lastEvent && VALID_SEQUENCES[lastEvent.event_type] && !VALID_SEQUENCES[lastEvent.event_type].includes(eventType)) {
-      await supabase.from("fraud_alerts").insert({
-        product_id: product.id,
-        alert_type: "invalid_sequence",
-        severity: "high",
-        description: `Invalid event sequence: ${lastEvent.event_type} → ${eventType} for ${product.product_code}`,
-      });
-      await supabase.from("products").update({ is_flagged: true, flag_reason: "Invalid supply chain event sequence" }).eq("id", product.id);
-      toast({
-        title: "⚠️ Sequence Warning",
-        description: `${lastEvent.event_type} → ${eventType} is not a valid transition. Alert raised.`,
-        variant: "destructive",
-      });
-    }
-
-    const { error } = await supabase.from("supply_chain_events").insert({
-      product_id: product.id,
-      actor_id: user!.id,
-      event_type: eventType,
-      location: location || null,
-      notes: notes || null,
-      latitude: lat,
-      longitude: lng,
-      previous_event_hash: lastEvent?.event_hash || null,
-      event_hash: eventHash,
-    });
-
-    if (error) {
-      toast({ title: "Error recording event", description: error.message, variant: "destructive" });
+    if (rpcError) {
+      toast({ title: "Error recording event", description: rpcError.message, variant: "destructive" });
     } else {
-      setSuccess(true);
-      toast({ title: "✓ Event recorded", description: `${EVENT_LABELS[eventType] || eventType} event added for ${product.product_code}` });
-      setProductCode("");
-      setLocation("");
-      setNotes("");
-      setLat(null);
-      setLng(null);
-      setTimeout(() => setSuccess(false), 4000);
+      const result = rpcData as { success: boolean; message?: string; reason?: string };
+      if (!result.success) {
+        // Rejected by the server (e.g. invalid_sequence — the RPC already
+        // created the fraud alert and flagged the product)
+        toast({
+          title: "⚠️ Event Rejected",
+          description: result.message ?? "The server rejected this event.",
+          variant: "destructive",
+        });
+      } else {
+        setSuccess(true);
+        toast({ title: "✓ Event recorded", description: `${EVENT_LABELS[eventType] || eventType} event added for ${product.product_code}` });
+        setProductCode("");
+        setLocation("");
+        setNotes("");
+        setLat(null);
+        setLng(null);
+        setTimeout(() => setSuccess(false), 4000);
+      }
     }
     setLoading(false);
   };
