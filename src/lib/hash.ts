@@ -1,4 +1,9 @@
-import CryptoJS from "crypto-js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+
+function hashPayload(payload: string): string {
+  return bytesToHex(sha256(utf8ToBytes(payload)));
+}
 
 export function generateProductHash(data: {
   productCode: string;
@@ -8,7 +13,7 @@ export function generateProductHash(data: {
   timestamp: string;
 }): string {
   const payload = `${data.productCode}|${data.name}|${data.brand}|${data.manufacturerId}|${data.timestamp}`;
-  return CryptoJS.SHA256(payload).toString();
+  return hashPayload(payload);
 }
 
 export function generateEventHash(data: {
@@ -19,7 +24,7 @@ export function generateEventHash(data: {
   previousHash?: string;
 }): string {
   const payload = `${data.productId}|${data.eventType}|${data.actorId}|${data.timestamp}|${data.previousHash || "genesis"}`;
-  return CryptoJS.SHA256(payload).toString();
+  return hashPayload(payload);
 }
 
 export function generateTransferHash(data: {
@@ -29,7 +34,7 @@ export function generateTransferHash(data: {
   timestamp: string;
 }): string {
   const payload = `${data.productId}|${data.fromUserId}|${data.toUserId}|${data.timestamp}`;
-  return CryptoJS.SHA256(payload).toString();
+  return hashPayload(payload);
 }
 
 export function generateProductCode(): string {
