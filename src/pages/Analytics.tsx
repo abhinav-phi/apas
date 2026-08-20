@@ -105,10 +105,10 @@ export default function Analytics() {
       );
 
     } catch (err) {
-      if (import.meta.env.DEV) console.error("[Analytics] fetchAll error:", err);
+      toast({ title: "Could not load analytics", description: (err as Error).message, variant: "destructive" });
     }
     setLoading(false);
-  }, [dateRange]);
+  }, [dateRange, toast]);
 
   useEffect(() => {
     document.title = "Analytics — AuthentiChain";
