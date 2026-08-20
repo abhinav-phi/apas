@@ -1,52 +1,70 @@
 -- ============================================================
--- v3_security_hardening.sql
--- AuthentiChain Security Hardening
--- 
--- CRITICAL: Fixes RBAC privilege escalation vulnerability.
--- Previously any authenticated user could INSERT/UPDATE their own
--- role in user_roles, allowing self-assignment of admin/manufacturer.
---
--- Run this in Supabase SQL Editor. Safe to re-run (IF NOT EXISTS / DROP IF EXISTS).
+-- AuthentiChain v3: CRITICAL Security Hardening (TEXT-role version)
+-- Fixes: Role self-escalation vulnerability
+-- SAFE TO RE-RUN.
 -- ============================================================
 
--- ─────────────────────────────────────────────
--- STEP 1: Drop insecure policies on user_roles
--- ─────────────────────────────────────────────
+-- 1. Remove dangerous self-service policies
 DROP POLICY IF EXISTS "Users can insert own roles" ON public.user_roles;
 DROP POLICY IF EXISTS "Users can update own roles" ON public.user_roles;
--- Also drop old select policy to replace with a better one
-DROP POLICY IF EXISTS "Users can view own roles" ON public.user_roles;
 
--- ─────────────────────────────────────────────
--- STEP 2: Add secure policies for user_roles
--- ─────────────────────────────────────────────
+-- 2. has_role() — TEXT-based, no enum casting needed
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = _role
+  )
+$$;
 
--- SELECT: users see their own role; admins can see all
-CREATE POLICY "Users can view own roles or admins see all"
-  ON public.user_roles
-  FOR SELECT TO authenticated
-  USING (auth.uid() = user_id OR public.has_role(auth.uid(), 'admin'));
+-- 3. Signup trigger — safe defaults only, 'admin' never grantable at signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _requested_role TEXT;
+  _final_role     TEXT;
+  _full_name      TEXT;
+  _company_name   TEXT;
+BEGIN
+  _requested_role := COALESCE(NEW.raw_user_meta_data->>'app_role', 'customer');
 
--- UPDATE: only admins can change roles
-CREATE POLICY "Only admins can update roles"
-  ON public.user_roles
-  FOR UPDATE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+  IF _requested_role IN ('manufacturer', 'supplier', 'customer') THEN
+    _final_role := _requested_role;
+  ELSE
+    _final_role := 'customer';
+  END IF;
 
--- DELETE: only admins can delete roles  
-CREATE POLICY "Only admins can delete roles"
-  ON public.user_roles
-  FOR DELETE TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+  _full_name    := COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1));
+  _company_name := NEW.raw_user_meta_data->>'company_name';
 
--- INSERT: NO direct insert policy.
--- Roles are ONLY created by the handle_new_user() SECURITY DEFINER trigger.
--- Admins can insert via the admin_change_role() RPC below.
+  IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = NEW.id) THEN
+    INSERT INTO public.user_roles (user_id, role) VALUES (NEW.id, _final_role);
+  END IF;
 
--- ─────────────────────────────────────────────
--- STEP 3: Admin-only RPC to change user roles
--- This runs as SECURITY DEFINER so it bypasses RLS.
--- ─────────────────────────────────────────────
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE user_id = NEW.id) THEN
+    INSERT INTO public.profiles (user_id, full_name, company_name)
+    VALUES (NEW.id, _full_name, _company_name);
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 4. admin_change_role() — the ONLY legitimate way to change a role
 CREATE OR REPLACE FUNCTION public.admin_change_role(
   p_target_user_id UUID,
   p_new_role TEXT
@@ -56,102 +74,37 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  v_caller_id UUID := auth.uid();
-  v_role_enum app_role;
 BEGIN
-  -- Only admins can call this
-  IF NOT public.has_role(v_caller_id, 'admin') THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: admin only');
+  IF NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Only admins can change user roles';
   END IF;
 
-  -- Validate new role
-  BEGIN
-    v_role_enum := p_new_role::app_role;
-  EXCEPTION WHEN invalid_text_representation THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Invalid role: ' || p_new_role);
-  END;
-
-  -- Cannot demote the last admin
-  IF EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = p_target_user_id AND role = 'admin'
-  ) AND p_new_role != 'admin' THEN
-    -- Check if this is the last admin
-    IF (SELECT COUNT(*) FROM public.user_roles WHERE role = 'admin') <= 1 THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Cannot remove the last admin');
-    END IF;
+  IF p_new_role NOT IN ('manufacturer', 'supplier', 'customer', 'admin') THEN
+    RAISE EXCEPTION 'Invalid role: %', p_new_role;
   END IF;
 
-  -- Upsert the role
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES (p_target_user_id, v_role_enum)
-  ON CONFLICT (user_id, role) DO NOTHING;
+  UPDATE public.user_roles SET role = p_new_role WHERE user_id = p_target_user_id;
 
-  -- Remove old roles for this user (they can only have one role at a time)
-  DELETE FROM public.user_roles
-  WHERE user_id = p_target_user_id AND role != v_role_enum;
+  IF NOT FOUND THEN
+    INSERT INTO public.user_roles (user_id, role) VALUES (p_target_user_id, p_new_role);
+  END IF;
 
-  RETURN jsonb_build_object(
-    'success', true,
-    'user_id', p_target_user_id,
-    'new_role', p_new_role
-  );
+  RETURN jsonb_build_object('success', true, 'user_id', p_target_user_id, 'new_role', p_new_role);
 END;
 $$;
 
--- Grant execute to authenticated users (the function itself checks admin inside)
 GRANT EXECUTE ON FUNCTION public.admin_change_role(UUID, TEXT) TO authenticated;
 
--- ─────────────────────────────────────────────
--- STEP 4: Also register admin_change_role in types
--- (for TypeScript — you'll need to update types.ts manually or via supabase gen)
--- ─────────────────────────────────────────────
+-- 5. Verification/profile flag
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT false;
 
--- ─────────────────────────────────────────────
--- STEP 5: Also update the handle_new_user trigger
--- to include company_name in profile (if not already)
--- ─────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  v_role TEXT;
-BEGIN
-  -- Read role from signup metadata
-  v_role := NEW.raw_user_meta_data->>'app_role';
-  
-  -- Default to 'customer' if no role specified  
-  IF v_role IS NULL OR v_role NOT IN ('manufacturer', 'supplier', 'customer', 'admin') THEN
-    v_role := 'customer';
-  END IF;
+-- 6. Lock down fraud_alerts inserts
+DROP POLICY IF EXISTS "System can insert fraud alerts" ON public.fraud_alerts;
+DROP POLICY IF EXISTS "Anon can insert fraud alerts" ON public.fraud_alerts;
 
-  -- Create profile
-  INSERT INTO public.profiles (user_id, full_name, company_name)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    NEW.raw_user_meta_data->>'company_name'
-  )
-  ON CONFLICT (user_id) DO NOTHING;
-
-  -- Create role
-  INSERT INTO public.user_roles (user_id, role)
-  VALUES (NEW.id, v_role::app_role)
-  ON CONFLICT (user_id, role) DO NOTHING;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
--- Ensure trigger exists
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- ─────────────────────────────────────────────
--- STEP 6: Verify the fix — run this to confirm:
--- SELECT rolname, polname, polcmd FROM pg_policies 
--- WHERE tablename = 'user_roles';
--- Result should NOT have any INSERT policy.
--- ─────────────────────────────────────────────
+-- 7. AUDIT: check for any already-escalated accounts
+SELECT au.email, ur.role, au.created_at
+FROM public.user_roles ur
+JOIN auth.users au ON au.id = ur.user_id
+WHERE ur.role IN ('admin', 'manufacturer')
+ORDER BY au.created_at DESC;
