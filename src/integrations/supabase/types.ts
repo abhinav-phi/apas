@@ -50,6 +50,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_stats: {
+        Row: {
+          day: string
+          products_created: number
+          scans: number
+          events: number
+          alerts: number
+          new_users: number
+          updated_at: string
+        }
+        Insert: {
+          day: string
+          products_created?: number
+          scans?: number
+          events?: number
+          alerts?: number
+          new_users?: number
+          updated_at?: string
+        }
+        Update: {
+          day?: string
+          products_created?: number
+          scans?: number
+          events?: number
+          alerts?: number
+          new_users?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fraud_alerts: {
         Row: {
           alert_type: string
@@ -186,9 +216,13 @@ export type Database = {
         Row: {
           batch_id: string | null
           blockchain_tx: string | null
+          blockchain_tx_status: string | null
           brand: string
           category: string
+          claimed_at: string | null
+          claimed_by: string | null
           created_at: string
+          current_owner_id: string | null
           description: string | null
           expiry_date: string | null
           flag_reason: string | null
@@ -213,9 +247,13 @@ export type Database = {
         Insert: {
           batch_id?: string | null
           blockchain_tx?: string | null
+          blockchain_tx_status?: string | null
           brand: string
           category?: string
+          claimed_at?: string | null
+          claimed_by?: string | null
           created_at?: string
+          current_owner_id?: string | null
           description?: string | null
           expiry_date?: string | null
           flag_reason?: string | null
@@ -240,9 +278,13 @@ export type Database = {
         Update: {
           batch_id?: string | null
           blockchain_tx?: string | null
+          blockchain_tx_status?: string | null
           brand?: string
           category?: string
+          claimed_at?: string | null
+          claimed_by?: string | null
           created_at?: string
+          current_owner_id?: string | null
           description?: string | null
           expiry_date?: string | null
           flag_reason?: string | null
@@ -281,6 +323,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          is_verified: boolean
           updated_at: string
           user_id: string
         }
@@ -290,6 +333,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          is_verified?: boolean
           updated_at?: string
           user_id: string
         }
@@ -299,6 +343,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          is_verified?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -307,12 +352,15 @@ export type Database = {
       scan_logs: {
         Row: {
           created_at: string
+          device_hash: string | null
           id: string
           ip_address: string | null
           is_suspicious: boolean
           latitude: number | null
           longitude: number | null
           product_id: string
+          scan_lat: number | null
+          scan_lng: number | null
           scan_location: string | null
           scanner_id: string | null
           suspicion_reason: string | null
@@ -320,12 +368,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          device_hash?: string | null
           id?: string
           ip_address?: string | null
           is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
           product_id: string
+          scan_lat?: number | null
+          scan_lng?: number | null
           scan_location?: string | null
           scanner_id?: string | null
           suspicion_reason?: string | null
@@ -333,12 +384,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          device_hash?: string | null
           id?: string
           ip_address?: string | null
           is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
           product_id?: string
+          scan_lat?: number | null
+          scan_lng?: number | null
           scan_location?: string | null
           scanner_id?: string | null
           suspicion_reason?: string | null
@@ -410,38 +464,173 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
+      }
+      wallet_addresses: {
+        Row: {
+          id: string
+          user_id: string
+          wallet_address: string
+          chain_id: number
+          verified: boolean
+          verified_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          wallet_address: string
+          chain_id?: number
+          verified?: boolean
+          verified_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          wallet_address?: string
+          chain_id?: number
+          verified?: boolean
+          verified_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallet_nonces: {
+        Row: {
+          id: string
+          wallet_address: string
+          nonce: string
+          expires_at: string
+          consumed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          wallet_address: string
+          nonce: string
+          expires_at: string
+          consumed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          wallet_address?: string
+          nonce?: string
+          expires_at?: string
+          consumed_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_nonces_wallet_address_fkey"
+            columns: ["wallet_address"]
+            isOneToOne: false
+            referencedRelation: "wallet_addresses"
+            referencedColumns: ["wallet_address"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_change_role: {
+        Args: {
+          p_target_user_id: string
+          p_new_role: string
+        }
+        Returns: Json
+      }
       anchor_to_blockchain: {
         Args: {
           p_product_id: string
         }
         Returns: Json
       }
+      expire_products_daily: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
+          _role: string
         }
         Returns: boolean
+      }
+      link_wallet_address: {
+        Args: {
+          p_wallet_address: string
+          p_nonce: string
+          p_signature: string
+          p_chain_id?: number
+        }
+        Returns: Json
+      }
+      log_product_scan: {
+        Args: {
+          p_product_id: string
+          p_user_agent?: string
+        }
+        Returns: Json
+      }
+      record_blockchain_anchor: {
+        Args: {
+          p_product_id: string
+          p_tx_hash: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      record_supply_chain_event: {
+        Args: {
+          p_product_id: string
+          p_event_type: string
+          p_location?: string
+          p_latitude?: number
+          p_longitude?: number
+          p_notes?: string
+        }
+        Returns: Json
+      }
+      refresh_daily_stats: {
+        Args: {
+          p_days?: number
+        }
+        Returns: undefined
+      }
+      request_wallet_nonce: {
+        Args: {
+          p_wallet_address: string
+        }
+        Returns: string
+      }
+      system_actor_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       transfer_product_ownership: {
         Args: {
@@ -450,6 +639,10 @@ export type Database = {
           p_transfer_type?: string
           p_notes?: string
         }
+        Returns: Json
+      }
+      unlink_wallet_address: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       verify_product_secure: {
