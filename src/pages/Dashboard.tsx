@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatCard } from "@/components/ui/stat-card";
@@ -37,6 +38,7 @@ interface AlertRow {
 
 export default function Dashboard() {
   const { user, role } = useAuth();
+  const { toast } = useToast();
   const [stats, setStats] = useState({ products: 0, flagged: 0, scans: 0, events: 0, alerts: 0, anchored: 0 });
   const [recentProducts, setRecentProducts] = useState<Tables<"products">[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<AlertRow[]>([]);
@@ -46,8 +48,8 @@ export default function Dashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      if (role === "supplier") {
-        const { count } = await supabase.from("supply_chain_events").select("id", { count: "exact", head: true }).eq("actor_id", user!.id);
+      if (role === "supplier" && user?.id) {
+        const { count } = await supabase.from("supply_chain_events").select("id", { count: "exact", head: true }).eq("actor_id", user.id);
         setStats({ products: 0, flagged: 0, scans: 0, events: count || 0, alerts: 0, anchored: 0 });
       } else {
         const [prodRes, flagRes, scanRes, eventRes, anchoredRes, alertRes] = await Promise.all([
@@ -93,10 +95,10 @@ export default function Dashboard() {
         .order("created_at", { ascending: true });
       if (scanRows) setScanChart(groupScansByDay(scanRows));
     } catch (e) {
-      if (import.meta.env.DEV) console.error("[Dashboard]", e);
+      toast({ title: "Could not load dashboard", description: (e as Error).message, variant: "destructive" });
     }
     setLoading(false);
-  }, [user, role]);
+  }, [user?.id, role, toast]);
 
   useEffect(() => {
     document.title = "Dashboard — AuthentiChain";
