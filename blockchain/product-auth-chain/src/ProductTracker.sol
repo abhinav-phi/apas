@@ -167,6 +167,7 @@ contract ProductTracker {
     error NotProductManufacturer();
     error CannotRevokeOwner();
     error NoRoleToRevoke();
+    error ArrayLengthMismatch();
 
     // ═══════════════════════════════════════════════════════
     //                     MODIFIERS
@@ -288,6 +289,66 @@ contract ProductTracker {
         }));
 
         emit ProductRegistered(_productId, _productHash, msg.sender, _batchId, block.timestamp);
+    }
+
+    /**
+     * @notice Batch product registration — one transaction for many products
+     *         (multicall-style entry point required for CSV bulk import:
+     *         one-tx-per-product is unusable and 100x the gas cost).
+     * @param _productIds   Unique product identifiers (UUID as bytes32)
+     * @param _productHashes SHA-256 verification hashes (bytes32 each)
+     * @param _batchId      Human-readable batch / lot identifier
+     * @return registered   Number of products actually registered
+     *                      (already-existing ids and zero hashes are skipped)
+     */
+    function registerProducts(
+        bytes32[] calldata _productIds,
+        bytes32[] calldata _productHashes,
+        string calldata _batchId
+    ) external onlyManufacturer returns (uint256 registered) {
+        if (_productIds.length != _productHashes.length) revert ArrayLengthMismatch();
+        if (_productIds.length == 0) revert InvalidHash();
+        if (bytes(_batchId).length == 0) revert EmptyString();
+
+        for (uint256 i = 0; i < _productIds.length; i++) {
+            bytes32 productId = _productIds[i];
+            bytes32 productHash = _productHashes[i];
+
+            // Skip duplicates and invalid hashes so a bulk import is not
+            // reverted by a single bad row (off-chain caller reports counts).
+            if (productExists[productId] || productHash == bytes32(0)) continue;
+
+            products[productId] = Product({
+                productHash:  productHash,
+                manufacturer: msg.sender,
+                currentOwner: msg.sender,
+                status:       Status.Registered,
+                batchId:      _batchId,
+                createdAt:    block.timestamp,
+                lastUpdated:  block.timestamp,
+                scanCount:    0,
+                recalled:     false
+            });
+
+            productExists[productId] = true;
+            _allProductIds.push(productId);
+            totalProducts++;
+
+            bytes32 genesisHash = keccak256(
+                abi.encodePacked(productHash, msg.sender, block.timestamp, "REGISTERED")
+            );
+
+            _supplyHistory[productId].push(SupplyEvent({
+                eventHash: genesisHash,
+                actor:     msg.sender,
+                location:  "Factory",
+                newStatus: Status.Registered,
+                timestamp: block.timestamp
+            }));
+
+            emit ProductRegistered(productId, productHash, msg.sender, _batchId, block.timestamp);
+            registered++;
+        }
     }
 
     // ═══════════════════════════════════════════════════════
