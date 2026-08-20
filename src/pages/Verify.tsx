@@ -7,44 +7,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Shield,
-  Package,
-  Plus,
   MapPin,
   Search,
   AlertTriangle,
   ExternalLink,
-  RefreshCw,
-  ChevronDown,
   Clock,
   CheckCircle2,
-  User,
   CameraOff,
   ScanLine,
-  FileText,
   Download,
   XCircle,
   ShieldCheck,
   ShieldAlert,
   Camera,
   Printer,
-  LogOut,
-  Map as MapIcon,
-  List,
   Loader2,
   RotateCcw,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { generateProductCertificate } from "@/lib/pdf";
 import { AppFooter } from "@/components/layout/AppFooter";
+import { OnChainProof } from "@/components/OnChainProof";
+import type { Tables } from "@/integrations/supabase/types";
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  return String(err);
+}
 
 type VerifyResult = {
   valid: boolean;
-  type: "GENUINE" | "CLONE" | "TAMPERED" | "NOT_FOUND";
+  type: "GENUINE" | "CLONE" | "TAMPERED" | "NOT_FOUND" | "RECALLED" | "EXPIRED" | "SUSPENDED";
   message: string;
   scan_count?: number;
   trust_score?: number;
   hash_chain_valid?: boolean;
   first_scanned_at?: string;
+  recalled_at?: string;
   product?: {
     id: string;
     name: string;
@@ -57,6 +57,7 @@ type VerifyResult = {
     expiry_date?: string;
     verification_hash?: string;
     blockchain_tx?: string;
+    blockchain_tx_status?: string | null;
     scan_status?: string;
     trust_score?: number;
     is_flagged?: boolean;
@@ -110,6 +111,27 @@ function getFakeLabel(type?: string) {
           "Supply chain records have been modified. Authenticity cannot be guaranteed.",
         icon: ShieldAlert,
       };
+    case "RECALLED":
+      return {
+        title: "Product Recalled",
+        subtitle:
+          "This product has been recalled by the manufacturer. Do not use or consume it.",
+        icon: AlertTriangle,
+      };
+    case "EXPIRED":
+      return {
+        title: "Product Expired",
+        subtitle:
+          "This product has passed its expiry date. Do not consume or rely on it.",
+        icon: Clock,
+      };
+    case "SUSPENDED":
+      return {
+        title: "Product Suspended",
+        subtitle:
+          "This product is currently under review. Verification is temporarily unavailable.",
+        icon: ShieldAlert,
+      };
     default:
       return {
         title: "Product Not Found",
@@ -121,12 +143,12 @@ function getFakeLabel(type?: string) {
 }
 
 function withTimeout<T>(
-  promise: Promise<T>,
+  promise: PromiseLike<T>,
   ms: number,
   label: string
 ): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error(label)), ms)
     ),
@@ -156,6 +178,16 @@ export default function Verify() {
   const isVerifyingRef = useRef(false);
   const handleVerifyRef = useRef<(input?: string) => Promise<void>>();
   const geoRef = useRef<GeoInfo>({ status: "idle", lat: null, lng: null });
+  const [troubleNudge, setTroubleNudge] = useState(false);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearNudgeTimer = useCallback(() => {
+    if (nudgeTimerRef.current) {
+      clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = null;
+    }
+    setTroubleNudge(false);
+  }, []);
 
   const log = (...args: unknown[]) => { if (import.meta.env.DEV) console.log("[Verify]", ...args); };
 
@@ -167,6 +199,7 @@ export default function Verify() {
   /* ───────── STOP CAMERA ───────── */
   const stopCamera = useCallback(async () => {
     log("stopCamera called, scannerRef exists:", !!scannerRef.current);
+    clearNudgeTimer();
     const inst = scannerRef.current;
     scannerRef.current = null;
     setCameraActive(false);
@@ -182,15 +215,15 @@ export default function Verify() {
         log("scanner stopped OK");
       }
     } catch (e: unknown) {
-      log("stop error (safe to ignore):", e?.message);
+      log("stop error (safe to ignore):", errorMessage(e));
     }
     try {
       inst.clear();
       log("scanner cleared OK");
     } catch (e: unknown) {
-      log("clear error (safe to ignore):", e?.message);
+      log("clear error (safe to ignore):", errorMessage(e));
     }
-  }, []);
+  }, [clearNudgeTimer]);
 
   /* ───────── GEO: silent background request ───────── */
   const requestGeo = useCallback(() => {
@@ -324,11 +357,12 @@ export default function Verify() {
         }
       } catch (err: unknown) {
         console.error("Verification error:", err);
+        const msg = errorMessage(err);
         setResult({
           valid: false,
           type: "NOT_FOUND",
           message:
-            err?.message === "RPC timeout"
+            msg === "RPC timeout"
               ? "Verification timed out. Please try again."
               : "Network error. Please try again.",
         });
@@ -417,7 +451,7 @@ export default function Verify() {
             inst
               .stop()
               .then(() => {
-                try { inst.clear(); } catch {}
+                try { inst.clear(); } catch { /* ignore */ }
               })
               .catch(() => {});
           }
@@ -433,6 +467,14 @@ export default function Verify() {
       setCameraActive(true);
       log("CAMERA IS LIVE — fps=30, scanSize=", scanSize, ", BarcodeDetector=true");
 
+      // Nudge if no QR detected within ~20s (camera stays open) — AppFlow §4.2
+      clearNudgeTimer();
+      nudgeTimerRef.current = setTimeout(() => {
+        if (!hasScannedRef.current && scannerRef.current) {
+          setTroubleNudge(true);
+        }
+      }, 20000);
+
       // ✅ Request geo AFTER camera is live to avoid permission dialog conflict
       // Small delay so camera permission dialog doesn't overlap geo dialog
       if (geoRef.current.status === "idle") {
@@ -442,19 +484,19 @@ export default function Verify() {
         }, 1500);
       }
     } catch (err: unknown) {
-      log("CAMERA ERROR:", err?.message || err);
+      log("CAMERA ERROR:", errorMessage(err));
       console.error("Full camera error:", err);
 
       const inst = scannerRef.current;
       scannerRef.current = null;
       setCameraActive(false);
       if (inst) {
-        try { inst.clear(); } catch {}
+        try { inst.clear(); } catch { /* ignore */ }
       }
 
       // User-friendly error messages
       let msg = "Could not start camera.";
-      const errMsg = (err?.message || "").toLowerCase();
+      const errMsg = errorMessage(err).toLowerCase();
       if (
         errMsg.includes("permission") ||
         errMsg.includes("denied") ||
@@ -477,7 +519,7 @@ export default function Verify() {
       }
       setCameraError(msg);
     }
-  }, [stopCamera, requestGeo]);
+  }, [clearNudgeTimer, stopCamera, requestGeo]);
 
   /* ───────── MOUNT / UNMOUNT ───────── */
   useEffect(() => {
@@ -503,13 +545,14 @@ export default function Verify() {
     log("resetVerification");
     hasScannedRef.current = false;
     isVerifyingRef.current = false;
+    clearNudgeTimer();
     await stopCamera();
     setViewState("scanning");
     setResult(null);
     setEvents([]);
     setQuery("");
     setCameraError(null);
-  }, [stopCamera]);
+  }, [clearNudgeTimer, stopCamera]);
 
   /* ───────── DERIVED VALUES ───────── */
   const trustScore = result?.trust_score ?? result?.product?.trust_score ?? 0;
@@ -517,22 +560,22 @@ export default function Verify() {
     trustScore >= 80 ? "High Trust" : trustScore >= 50 ? "Medium Trust" : "Low Trust";
   const trustColor =
     trustScore >= 80
-      ? "text-emerald-600"
+      ? "#71ffe8"
       : trustScore >= 50
-      ? "text-amber-600"
-      : "text-red-600";
+      ? "#f9bc48"
+      : "#ffb4ab";
   const trustBarColor =
     trustScore >= 80
-      ? "bg-emerald-500"
+      ? "#71ffe8"
       : trustScore >= 50
-      ? "bg-amber-500"
-      : "bg-red-500";
+      ? "#f9bc48"
+      : "#ffb4ab";
 
   /* ───────── GEO STATUS BADGE ───────── */
   const GeoStatusBadge = () => {
     if (geo.status === "granted" && geo.lat !== null)
       return (
-        <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+        <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ color: "#71ffe8", background: "rgba(113,255,232,0.1)" }}>
           <MapPin className="w-3 h-3" />
           <span>
             {geo.lat.toFixed(4)}, {geo.lng!.toFixed(4)}
@@ -541,7 +584,7 @@ export default function Verify() {
       );
     if (geo.status === "requesting")
       return (
-        <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+        <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ color: "#f9bc48", background: "rgba(249,188,72,0.1)" }}>
           <Loader2 className="w-3 h-3 animate-spin" />
           <span>Getting location...</span>
         </div>
@@ -550,7 +593,8 @@ export default function Verify() {
       return (
         <button
           onClick={requestGeo}
-          className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 px-2.5 py-1 rounded-full hover:bg-red-100"
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors"
+          style={{ color: "#ffb4ab", background: "rgba(255,180,171,0.1)" }}
         >
           <MapPin className="w-3 h-3" />
           <span>Location denied — retry</span>
@@ -564,29 +608,29 @@ export default function Verify() {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (viewState === "verifying") {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={{ background: "#10141a" }}>
         <div className="relative w-16 h-16 mb-6">
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary border-r-primary/50 animate-spin" />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin" style={{ borderColor: "#00e5cc", borderTopColor: "transparent" }} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <Shield className="w-6 h-6 text-primary" />
+            <Shield className="w-6 h-6" style={{ color: "#00e5cc" }} />
           </div>
         </div>
-        <h1 className="text-xl font-semibold text-foreground mb-1">
+        <h1 className="text-xl font-semibold mb-1" style={{ color: "#dfe2eb" }}>
           Verifying product...
         </h1>
-        <p className="text-muted-foreground text-sm mb-8">Running security checks</p>
+        <p className="text-sm mb-8" style={{ color: "#849490" }}>Running security checks</p>
         <div className="space-y-3 text-left max-w-xs">
-          {["Clone Detection", "Geo-location Analysis", "Hash Chain Integrity"].map(
+          {["Status Check", "Clone Detection", "Geo-location Analysis", "Hash Chain Integrity"].map(
             (label) => (
               <div key={label} className="flex items-center gap-3 text-sm">
-                <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
-                <span className="text-muted-foreground">{label}</span>
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" style={{ color: "#00e5cc" }} />
+                <span style={{ color: "#849490" }}>{label}</span>
               </div>
             )
           )}
         </div>
         {geo.lat !== null && (
-          <div className="mt-6 flex items-center gap-1.5 text-xs text-emerald-600">
+          <div className="mt-6 flex items-center gap-1.5 text-xs" style={{ color: "#71ffe8" }}>
             <MapPin className="w-3 h-3" />
             <span>
               Location: {geo.lat.toFixed(4)}, {geo.lng!.toFixed(4)}
@@ -604,27 +648,27 @@ export default function Verify() {
     const fakeInfo = getFakeLabel(result?.type);
     const FakeIcon = fakeInfo.icon;
     return (
-      <div className="min-h-screen flex flex-col bg-white">
-        <header className="border-b bg-card/80 backdrop-blur-xl">
+      <div className="min-h-screen flex flex-col" style={{ background: "#10141a" }}>
+        <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)" }}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
               <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
-              <span className="font-bold text-sm">AuthentiChain</span>
+              <span className="font-bold text-sm" style={{ color: "#dfe2eb" }}>AuthentiChain</span>
             </Link>
           </div>
         </header>
 
         <div className="flex-1 flex items-center justify-center px-4 py-12">
           <div className="text-center max-w-md w-full">
-            <FakeIcon className="w-16 h-16 text-destructive mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-foreground mb-2">
+            <FakeIcon className="w-16 h-16 mx-auto mb-4" style={{ color: "#ffb4ab" }} />
+            <h1 className="text-2xl font-bold mb-2" style={{ color: "#dfe2eb" }}>
               {fakeInfo.title}
             </h1>
             {result?.message && (
-              <p className="text-muted-foreground mb-6">{result.message}</p>
+              <p className="mb-6" style={{ color: "#849490" }}>{result.message}</p>
             )}
             {result?.product && (
-              <div className="rounded-lg p-4 mb-6 text-left border bg-muted/30">
+              <div className="rounded-lg p-4 mb-6 text-left border" style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(113,255,232,0.06)" }}>
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { label: "Product", value: result.product.name },
@@ -640,22 +684,22 @@ export default function Verify() {
                     .filter(Boolean)
                     .map((f) => (
                       <div key={f.label}>
-                        <p className="text-xs text-muted-foreground">{f.label}</p>
-                        <p className="text-sm font-medium">{f.value}</p>
+                        <p className="text-xs" style={{ color: "#849490" }}>{f.label}</p>
+                        <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>{f.value}</p>
                       </div>
                     ))}
                 </div>
               </div>
             )}
             {geo.lat !== null && (
-              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground mb-4">
+              <div className="flex items-center justify-center gap-1.5 text-xs mb-4" style={{ color: "#849490" }}>
                 <MapPin className="w-3 h-3" />
                 <span>
                   Scanned from: {geo.lat.toFixed(4)}, {geo.lng!.toFixed(4)}
                 </span>
               </div>
             )}
-            <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">
+            <p className="text-sm mb-8 max-w-sm mx-auto" style={{ color: "#849490" }}>
               {fakeInfo.subtitle}
             </p>
             <div className="flex justify-center mt-4">
@@ -674,15 +718,15 @@ export default function Verify() {
   if (viewState === "genuine" && result?.product) {
     const prod = result.product;
     return (
-      <div className="min-h-screen flex flex-col bg-white print:bg-white">
+      <div className="min-h-screen flex flex-col print:bg-white" style={{ background: "#10141a" }}>
         {/* Print-only certificate */}
         <div className="hidden print:block p-12">
-          <div className="text-center border-2 border-emerald-600 p-10 max-w-lg mx-auto">
-            <div className="text-xl font-bold mb-2">AuthentiChain</div>
-            <h1 className="text-2xl font-bold mt-6 mb-8">
+          <div className="text-center border-2 px-10 py-10 max-w-lg mx-auto" style={{ borderColor: "#71ffe8" }}>
+            <div className="text-xl font-bold mb-2" style={{ color: "#10141a" }}>AuthentiChain</div>
+            <h1 className="text-2xl font-bold mt-6 mb-8" style={{ color: "#10141a" }}>
               CERTIFICATE OF AUTHENTICITY
             </h1>
-            <div className="text-left space-y-2 mb-8">
+            <div className="text-left space-y-2 mb-8" style={{ color: "#10141a" }}>
               <p>
                 <strong>Product Name:</strong> {prod.name}
               </p>
@@ -708,7 +752,7 @@ export default function Verify() {
                 </p>
               )}
             </div>
-            <div className="text-2xl font-bold text-emerald-600 border-2 border-emerald-600 inline-block px-6 py-2">
+            <div className="text-2xl font-bold border-2 inline-block px-6 py-2" style={{ color: "#00b8a0", borderColor: "#00b8a0" }}>
               VERIFIED GENUINE
             </div>
           </div>
@@ -716,13 +760,13 @@ export default function Verify() {
 
         {/* Screen view */}
         <div className="print:hidden">
-          <header className="border-b bg-card/80 backdrop-blur-xl">
+          <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)" }}>
             <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
               <Link to="/" className="flex items-center gap-2">
                 <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
-                <span className="font-bold text-sm">AuthentiChain</span>
+                <span className="font-bold text-sm" style={{ color: "#dfe2eb" }}>AuthentiChain</span>
               </Link>
-              <span className="text-muted-foreground text-sm ml-auto">
+              <span className="text-sm ml-auto" style={{ color: "#849490" }}>
                 Verification Result
               </span>
             </div>
@@ -730,10 +774,10 @@ export default function Verify() {
 
           <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 space-y-4">
             <div className="text-center py-6">
-              <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
-              <h1 className="text-2xl font-bold text-foreground mb-1">Authentic</h1>
-              <p className="text-muted-foreground mb-1">{result.message}</p>
-              <p className="text-muted-foreground/60 text-sm mb-4">
+              <CheckCircle2 className="w-14 h-14 mx-auto mb-3" style={{ color: "#71ffe8" }} />
+              <h1 className="text-2xl font-bold mb-1" style={{ color: "#dfe2eb" }}>Authentic</h1>
+              <p className="mb-1" style={{ color: "#849490" }}>{result.message}</p>
+              <p className="text-sm mb-4" style={{ color: "rgba(132,148,144,0.6)" }}>
                 Scanned {result.scan_count || 1} time
                 {(result.scan_count || 1) > 1 ? "s" : ""}
               </p>
@@ -760,45 +804,47 @@ export default function Verify() {
             </div>
 
             {/* Trust Score */}
-            <div className="rounded-lg p-4 border bg-card">
+            <div className="rounded-lg p-4 border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-sm text-muted-foreground">
+                <h3 className="font-medium text-sm" style={{ color: "#849490" }}>
                   Trust Score
                 </h3>
-                <span className={`text-sm font-semibold ${trustColor}`}>
+                <span className="text-sm font-semibold" style={{ color: trustColor }}>
                   {trustScore}/100 — {trustLabel}
                 </span>
               </div>
-              <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+              <div className="w-full overflow-hidden rounded-full h-2.5" style={{ background: "rgba(255,255,255,0.06)" }}>
                 <div
-                  className={`h-full rounded-full ${trustBarColor}`}
-                  style={{ width: `${Math.max(0, Math.min(100, trustScore))}%` }}
+                  className={`h-full rounded-full`}
+                  style={{ width: `${Math.max(0, Math.min(100, trustScore))}%`, background: trustBarColor }}
                 />
               </div>
             </div>
 
             {/* Scan Location */}
-            <div className="rounded-lg p-4 border bg-card">
+            <div className="rounded-lg p-4 border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${
-                    geo.lat !== null ? "bg-emerald-100" : "bg-muted"
-                  }`}
+                  className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
+                  style={
+                    geo.lat !== null
+                      ? { background: "rgba(113,255,232,0.1)" }
+                      : { background: "rgba(255,255,255,0.04)" }
+                  }
                 >
                   <MapPin
-                    className={`w-4 h-4 ${
-                      geo.lat !== null ? "text-emerald-600" : "text-muted-foreground"
-                    }`}
+                    className="w-4 h-4"
+                    style={{ color: geo.lat !== null ? "#71ffe8" : "#849490" }}
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">Scan Location</p>
+                  <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>Scan Location</p>
                   {geo.lat !== null ? (
-                    <p className="text-xs text-muted-foreground font-mono">
+                    <p className="text-xs font-mono" style={{ color: "#849490" }}>
                       {geo.lat.toFixed(6)}, {geo.lng!.toFixed(6)}
                     </p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs" style={{ color: "#849490" }}>
                       Location not available
                     </p>
                   )}
@@ -808,7 +854,8 @@ export default function Verify() {
                     href={`https://www.google.com/maps?q=${geo.lat},${geo.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                    className="text-xs hover:underline flex items-center gap-1"
+                    style={{ color: "#00e5cc" }}
                   >
                     View Map <ExternalLink className="w-3 h-3" />
                   </a>
@@ -816,20 +863,31 @@ export default function Verify() {
               </div>
             </div>
 
-            {/* Blockchain */}
-            {prod.blockchain_tx && (
+            {/* Blockchain — real Sepolia anchor (Etherscan link only once confirmed) */}
+            {prod.blockchain_tx && prod.blockchain_tx_status === "confirmed" && (
+              <OnChainProof
+                productId={prod.id}
+                verificationHash={prod.verification_hash ?? ""}
+                txHash={prod.blockchain_tx}
+              />
+            )}
+            {prod.blockchain_tx && prod.blockchain_tx_status !== "confirmed" && (
               <div className="rounded-lg p-4 border bg-card">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-md bg-emerald-100 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ background: "rgba(249,188,72,0.1)" }}>
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#f9bc48" }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Hash Anchored (Simulated)</p>
+                    <p className="text-sm font-medium">
+                      {prod.blockchain_tx_status === "failed" ? "On-chain anchor failed" : "Anchor pending"}
+                    </p>
                     <p className="text-xs text-muted-foreground font-mono truncate" title={prod.blockchain_tx}>
                       {prod.blockchain_tx.substring(0, 24)}...
                     </p>
                     <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                      SHA-256 fingerprint — real blockchain integration planned
+                      {prod.blockchain_tx_status === "failed"
+                        ? "The anchoring transaction reverted — no on-chain proof is shown."
+                        : "Transaction submitted to Sepolia — proof appears once confirmed."}
                     </p>
                   </div>
                 </div>
@@ -838,14 +896,14 @@ export default function Verify() {
 
 
             {/* Hash Chain */}
-            <div className="rounded-lg p-4 border bg-card">
+            <div className="rounded-lg p-4 border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
               <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                <ShieldCheck className="w-5 h-5 shrink-0" style={{ color: "#71ffe8" }} />
                 <div>
-                  <p className="text-sm font-medium">
+                  <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>
                     Hash Chain Integrity: Verified
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs" style={{ color: "#849490" }}>
                     All supply chain records are tamper-resistant.
                   </p>
                 </div>
@@ -853,8 +911,8 @@ export default function Verify() {
             </div>
 
             {/* Product Details */}
-            <div className="rounded-lg p-5 border bg-card">
-              <h3 className="font-medium mb-3">Product Details</h3>
+            <div className="rounded-lg p-5 border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
+              <h3 className="font-medium mb-3" style={{ color: "#dfe2eb" }}>Product Details</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: "Name", value: prod.name },
@@ -877,17 +935,17 @@ export default function Verify() {
                   },
                 ].map((f) => (
                   <div key={f.label}>
-                    <p className="text-xs text-muted-foreground">{f.label}</p>
-                    <p className="text-sm font-medium">{f.value}</p>
+                    <p className="text-xs" style={{ color: "#849490" }}>{f.label}</p>
+                    <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>{f.value}</p>
                   </div>
                 ))}
               </div>
               {prod.verification_hash && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs text-muted-foreground">
+                <div className="mt-4 pt-4 border-t" style={{ borderColor: "rgba(113,255,232,0.06)" }}>
+                  <p className="text-xs" style={{ color: "#849490" }}>
                     Verification Hash
                   </p>
-                  <p className="text-xs font-mono text-muted-foreground/50 break-all">
+                  <p className="text-xs font-mono break-all" style={{ color: "rgba(132,148,144,0.5)" }}>
                     {prod.verification_hash}
                   </p>
                 </div>
@@ -896,8 +954,8 @@ export default function Verify() {
 
             {/* Supply Chain Timeline */}
             {events.length > 0 && (
-              <div className="rounded-lg p-5 border bg-card">
-                <h3 className="font-medium mb-3">Supply Chain Journey</h3>
+              <div className="rounded-lg p-5 border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
+                <h3 className="font-medium mb-3" style={{ color: "#dfe2eb" }}>Supply Chain Journey</h3>
                 <SupplyChainTimeline events={events} />
               </div>
             )}
@@ -976,9 +1034,25 @@ export default function Verify() {
             {/* Scanning badge */}
             {cameraActive && (
               <div className="absolute top-3 left-0 right-0 text-center pointer-events-none z-20">
-                <span className="inline-flex items-center gap-1.5 bg-black/60 text-blue-300 text-xs px-3 py-1.5 rounded-full">
+                <span className="inline-flex items-center gap-1.5 bg-black/60 text-xs px-3 py-1.5 rounded-full" style={{ color: "#71ffe8", fontFamily: "IBM Plex Mono, monospace" }}>
                   <ScanLine className="w-3 h-3 animate-pulse" />
                   Scanning — hold QR steady
+                </span>
+              </div>
+            )}
+
+            {/* Trouble-scanning nudge — camera stays open (AppFlow §4.2) */}
+            {cameraActive && troubleNudge && (
+              <div className="absolute top-12 left-0 right-0 text-center pointer-events-none z-20">
+                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
+                  style={{
+                    background: "rgba(249,188,72,0.15)",
+                    color: "#f9bc48",
+                    fontFamily: "IBM Plex Mono, monospace",
+                  }}
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  Having trouble? Enter the code manually below
                 </span>
               </div>
             )}
@@ -1052,14 +1126,14 @@ export default function Verify() {
         {/* How it works */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
           {[
-            { icon: "📷", label: "Scan QR", desc: "Point camera at code" },
-            { icon: "🔍", label: "Verify", desc: "Instant security checks" },
-            { icon: "✅", label: "Result", desc: "Authentic or counterfeit" },
+            { icon: Camera, label: "Scan QR", desc: "Point camera at code" },
+            { icon: Search, label: "Verify", desc: "Instant security checks" },
+            { icon: CheckCircle2, label: "Result", desc: "Authentic or counterfeit" },
           ].map((s) => (
-            <div key={s.label} className="p-4 rounded-lg border bg-card">
-              <div className="text-xl mb-1">{s.icon}</div>
-              <p className="text-sm font-medium">{s.label}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+            <div key={s.label} className="p-4 rounded-lg border" style={{ background: "#161B22", borderColor: "rgba(113,255,232,0.1)" }}>
+              <s.icon className="w-5 h-5 mx-auto mb-1" style={{ color: "#00e5cc" }} />
+              <p className="text-sm font-medium" style={{ color: "#dfe2eb" }}>{s.label}</p>
+              <p className="text-xs mt-0.5" style={{ color: "#849490" }}>{s.desc}</p>
             </div>
           ))}
         </div>
