@@ -1,36 +1,53 @@
 import { Component, ReactNode } from "react";
+import { FlowButton } from "@/components/ui/flow-button";
+import { AlertTriangle } from "lucide-react";
 
-export class ErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean; error?: Error | null }
-> {
-  constructor(props: React.PropsWithChildren<unknown>) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+interface Props {
+  children: ReactNode;
+}
 
-  static getDerivedStateFromError(error: Error) {
+interface State {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  render() {
-    if (this.state.hasError)
+  public render() {
+    if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-center space-y-4 p-8">
-            <h1 className="text-2xl font-bold">Something went wrong</h1>
-            <p className="text-muted-foreground text-sm">
-              {this.state.error?.message || "An unexpected error occurred"}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
-            >
-              Reload App
-            </button>
+        <div
+          className="min-h-screen flex flex-col items-center justify-center p-6 text-center"
+          style={{ background: "#10141a" }}
+        >
+          <div
+            className="w-16 h-16 rounded-2xl mb-6 flex items-center justify-center"
+            style={{ background: "rgba(255,180,171,0.1)", color: "#ffb4ab" }}
+          >
+            <AlertTriangle className="w-8 h-8" />
           </div>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: "#dfe2eb" }}>
+            Something went wrong
+          </h1>
+          <p className="max-w-md text-sm mb-8" style={{ color: "#849490" }}>
+            An unexpected error occurred. The application was unable to recover.
+          </p>
+          <FlowButton
+            onClick={() => (window.location.href = "/")}
+            text="Return Home"
+          />
         </div>
       );
+    }
+
     return this.props.children;
   }
 }
