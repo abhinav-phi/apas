@@ -38,13 +38,14 @@ function errorMessage(err: unknown): string {
 
 type VerifyResult = {
   valid: boolean;
-  type: "GENUINE" | "CLONE" | "TAMPERED" | "NOT_FOUND" | "RECALLED" | "EXPIRED" | "SUSPENDED";
+  type: "GENUINE" | "CLONE" | "TAMPERED" | "NOT_FOUND" | "RECALLED" | "EXPIRED" | "SUSPENDED" | "RATE_LIMITED";
   message: string;
   scan_count?: number;
   trust_score?: number;
   hash_chain_valid?: boolean;
   first_scanned_at?: string;
   recalled_at?: string;
+  events?: Tables<"supply_chain_events">[];
   product?: {
     id: string;
     name: string;
@@ -131,6 +132,13 @@ function getFakeLabel(type?: string) {
         subtitle:
           "This product is currently under review. Verification is temporarily unavailable.",
         icon: ShieldAlert,
+      };
+    case "RATE_LIMITED":
+      return {
+        title: "Too Many Attempts",
+        subtitle:
+          "Verification rate limit reached from this device. Please wait a minute and try again.",
+        icon: Clock,
       };
     default:
       return {
@@ -345,16 +353,8 @@ export default function Verify() {
 
         setViewState("genuine");
 
-        if (res.product?.id) {
-          log("fetching supply_chain_events for:", res.product.id);
-          const { data: evts } = await supabase
-            .from("supply_chain_events")
-            .select("*")
-            .eq("product_id", res.product.id)
-            .order("created_at", { ascending: true });
-          log("events fetched:", evts?.length || 0);
-          setEvents(evts || []);
-        }
+        // Journey timeline ships with the RPC result (no direct table reads)
+        setEvents(res.events ?? []);
       } catch (err: unknown) {
         console.error("Verification error:", err);
         const msg = errorMessage(err);
