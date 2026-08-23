@@ -16,26 +16,16 @@ export function generateProductHash(data: {
   return hashPayload(payload);
 }
 
-export function generateEventHash(data: {
-  productId: string;
-  eventType: string;
-  actorId: string;
-  timestamp: string;
-  previousHash?: string;
-}): string {
-  const payload = `${data.productId}|${data.eventType}|${data.actorId}|${data.timestamp}|${data.previousHash || "genesis"}`;
-  return hashPayload(payload);
-}
+// NOTE: Event hash generation is intentionally NOT provided here.
+// Per TechSpec §4.2 / Rules R16, event hashes are computed SERVER-SIDE inside
+// record_supply_chain_event() — any client-computed hash would be forgeable
+// (no server secret, all fields knowable). Client-submitted hashes are discarded.
 
-export function generateTransferHash(data: {
-  productId: string;
-  fromUserId: string;
-  toUserId: string;
-  timestamp: string;
-}): string {
-  const payload = `${data.productId}|${data.fromUserId}|${data.toUserId}|${data.timestamp}`;
-  return hashPayload(payload);
-}
+// NOTE: Event and transfer hash generation are intentionally NOT provided here.
+// Event hashes are computed SERVER-SIDE inside record_supply_chain_event() and
+// transfer hashes inside transfer_product_ownership() (TechSpec §4.2/§4.3, Rules
+// R16) — any client-computed hash would be forgeable (no server secret, all
+// fields knowable). Client-submitted hashes are discarded by both RPCs.
 
 export function generateProductCode(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
