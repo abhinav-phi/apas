@@ -145,6 +145,9 @@ export async function readOnChainProduct(
   productId: `0x${string}`
 ): Promise<OnChainProduct | null> {
   if (!isBlockchainConfigured()) return null;
+  // NOTE: `authorizationList: []` is required by viem 2.55.x typings
+  // (ReadContractParameters declares it as a mandatory property). It is inert
+  // for eth_call view reads.
   const exists = await publicClient.readContract({
     address: CONTRACT_ADDRESS as `0x${string}`,
     abi: PRODUCT_TRACKER_ABI,
