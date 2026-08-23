@@ -14,7 +14,7 @@
   [![Tests](https://img.shields.io/badge/tests-28%20passing-2EA043)](#running-tests)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-  **[Operator Runbook](MANUAL_STEPS.md)** · **[System Design](#architecture)** · **[Security Model](#security--trust-model)** · **[RPC Reference](#routes--rpc-reference)**
+  **[Operator Runbook](MANUAL_STEPS.md)** · **[Contributing](CONTRIBUTING.md)** · **[System Design](#architecture)** · **[Security Model](#security--trust-model)** · **[RPC Reference](#routes--rpc-reference)**
 </div>
 
 > Screenshots are being captured and will be added here — every claim in this README is backed by the code in this repository.
@@ -284,7 +284,7 @@ QR data column = PRD-XXXXXXXX::<16-char hash prefix>
 ### Installation
 
 ```bash
-git clone <your-repository-url> authentichain
+git clone https://github.com/abhinav-phi/apas authentichain
 cd authentichain
 npm ci
 ```
@@ -475,10 +475,14 @@ Build artifacts and installed dependencies are generated locally and never commi
 
 ## Contributing
 
-1. Fork the repository and create a branch: `git checkout -b feature/your-feature`
-2. Follow the project development rules - notably: no `any` types, no client-side role logic, hashes never computed client-side, dark theme tokens only, errors surfaced via toasts, meaningful conventional commits.
-3. Run the gates before opening a PR: `npm run lint && npx tsc -b && npm test && npm run build`
-4. Open a Pull Request with a clear description of what changed and why.
+Contributions are welcome — please open an issue first to discuss significant changes.
+
+1. Read the full contribution guide: **[CONTRIBUTING.md](CONTRIBUTING.md)** — it covers branching, coding standards, the security rules that make this codebase safe to change, and the PR process.
+2. Branch from `main` using conventional names (`feat/…`, `fix/…`, `docs/…`), one logical change per PR.
+3. Follow the project development rules: no `any` types, no client-side authorization or role logic, hashes never computed client-side, RLS and append-only tables untouched, dark theme tokens only, errors surfaced via toasts.
+4. Run the required checks before requesting review: `npm run lint && npx tsc -b && npm test && npm run build && npm audit` (plus `forge build && forge test` for contract changes).
+
+Security-sensitive areas (RLS, SECURITY DEFINER RPCs, hash chain, fraud thresholds) require maintainer review with explicit sign-off. Security vulnerabilities go to `abhinav.phi15@gmail.com` — never public issues.
 
 ## License
 
@@ -495,4 +499,4 @@ Distributed under the [MIT License](LICENSE).
 
 ## Contact
 
-Project maintained by **Abhinav** — repository and contact links to be added.
+Project maintained by **Abhinav** — [github.com/abhinav-phi/apas](https://github.com/abhinav-phi/apas) · abhinav.phi15@gmail.com

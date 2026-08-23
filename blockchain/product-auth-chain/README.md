@@ -105,7 +105,7 @@ Install Foundry by running curl -L https://foundry.paradigm.xyz | bash and then 
 
 ### Clone and Build
 
-Clone the repository with git clone https://github.com/YOUR_USERNAME/product-auth-chain.git then cd product-auth-chain and run forge install followed by forge build.
+Clone the repository with git clone https://github.com/abhinav-phi/apas.git then cd product-auth-chain and run forge install followed by forge build.
 
 ### Run Tests
 
