@@ -6,6 +6,8 @@ This is not a QR code project. QR acts only as an interface. The system ensures 
 
 ## Deployed Contract
 
+> **Cross-reference:** this deployment is the single source of truth for the platform's blockchain status. The main `README.md`, `docs/2. TechSpec.md`, and `docs/7. Tracker.md` reference this address; the app enables anchoring only when `VITE_CONTRACT_ADDRESS` is set to it and the connecting wallet holds the required on-chain role.
+
 | Detail | Value |
 |---|---|
 | Network | Ethereum Sepolia Testnet |
