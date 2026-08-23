@@ -34,13 +34,5 @@ dist-ssr
 *.sw?
 
 # Documentation and tracking
-1. PRD.md
-2. TechSpec.md
-3. AppFlow.md
-4. Design.md
-5. Schema.md
-6. ImplementationPlan.md
-7. Tracker.md
-8. Rules.md
-updation.md
+/docs
 *.tsbuildinfo
