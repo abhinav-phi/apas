@@ -51,8 +51,8 @@ Prerequisites:
 - Optional: MetaMask + Sepolia test ETH for anchoring work; [Foundry](https://book.getfoundry.sh/) for contract work
 
 ```bash
-git clone https://github.com/abhinav-phi/apas authentichain
-cd authentichain
+git clone https://github.com/abhinav-phi/apas
+cd apas
 npm ci
 cp .env.example .env   # local environment file; fill in Supabase URL + anon key
 ```

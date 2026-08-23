@@ -284,8 +284,8 @@ QR data column = PRD-XXXXXXXX::<16-char hash prefix>
 ### Installation
 
 ```bash
-git clone https://github.com/abhinav-phi/apas authentichain
-cd authentichain
+git clone https://github.com/abhinav-phi/apas
+cd apas
 npm ci
 ```
 
