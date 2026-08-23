@@ -94,7 +94,7 @@ export default function Dashboard() {
         .gte("created_at", since7d.toISOString())
         .order("created_at", { ascending: true });
       if (scanRows) setScanChart(groupScansByDay(scanRows));
-    } catch (e) {
+    } catch (e: unknown) {
       toast({ title: "Could not load dashboard", description: (e as Error).message, variant: "destructive" });
     }
     setLoading(false);

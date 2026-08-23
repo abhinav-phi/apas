@@ -153,7 +153,7 @@ export default function Settings() {
 
       toast({ title: "Wallet linked", description: `${shortAddress(walletAddress)} is now verified for on-chain actions.` });
       await fetchWallet();
-    } catch (err) {
+    } catch (err: unknown) {
       const werr = toWalletError(err);
       toast({ title: "Wallet linking failed", description: werr.message, variant: "destructive" });
     } finally {

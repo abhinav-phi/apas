@@ -46,7 +46,7 @@ export function OnChainProof({
         } else {
           setProof({ kind: "mismatch" });
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setProof({
             kind: "unavailable",

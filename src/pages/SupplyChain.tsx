@@ -39,7 +39,7 @@ export default function SupplyChain() {
         if (error) throw error;
         if (data) setProducts(data);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       toast({ title: "Could not load products", description: (err as Error).message, variant: "destructive" });
     }
   }, [user?.id, role, toast]);

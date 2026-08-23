@@ -117,7 +117,7 @@ export function useBlockchain() {
         wrongNetwork: chainId !== null && chainId !== SEPOLIA_CHAIN_ID,
       }));
       return address;
-    } catch (err) {
+    } catch (err: unknown) {
       setState((s) => ({ ...s, connecting: false }));
       throw toWalletError(err);
     }
@@ -133,7 +133,7 @@ export function useBlockchain() {
         method: "wallet_switchEthereumChain",
         params: [{ chainId: SEPOLIA_HEX_CHAIN_ID }],
       });
-    } catch (switchErr) {
+    } catch (switchErr: unknown) {
       const err = switchErr as { code?: number };
       if (err.code === 4902 || err.code === -32603) {
         await provider.request({
@@ -222,7 +222,7 @@ export function useBlockchain() {
           chain: null,
         });
         txHash = hash as Hash;
-      } catch (err) {
+      } catch (err: unknown) {
         throw toWalletError(err);
       }
 
@@ -237,7 +237,7 @@ export function useBlockchain() {
       try {
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
         status = receipt.status === "success" ? "confirmed" : "failed";
-      } catch (err) {
+      } catch (err: unknown) {
         // RPC timeout/drop: leave as pending — user can retry the confirmation check
         throw toWalletError(err);
       }
@@ -276,7 +276,7 @@ export function useBlockchain() {
           chain: null,
         });
         txHash = hash as Hash;
-      } catch (err) {
+      } catch (err: unknown) {
         throw toWalletError(err);
       }
 

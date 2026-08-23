@@ -169,7 +169,7 @@ export default function Products() {
         batchCode: product.batch_id ?? "none",
       });
       setAnchorEstimate(est);
-    } catch (err) {
+    } catch (err: unknown) {
       const werr = toWalletError(err);
       setAnchorTarget(null);
       if (werr.code === "insufficient_funds") {
@@ -203,7 +203,7 @@ export default function Products() {
       }
       setAnchorTarget(null);
       fetchProducts();
-    } catch (err) {
+    } catch (err: unknown) {
       const werr = toWalletError(err);
       if (werr.code === "cancelled") {
         toast({ title: "Transaction cancelled", description: werr.message });
@@ -259,7 +259,7 @@ export default function Products() {
         variant: result.status === "confirmed" ? undefined : "destructive",
       });
       fetchProducts();
-    } catch (err) {
+    } catch (err: unknown) {
       const werr = toWalletError(err);
       toast({
         title: werr.code === "cancelled" ? "Transaction cancelled" : "Batch anchor failed",
@@ -272,21 +272,14 @@ export default function Products() {
   };
 
   const handleRecall = async (productId: string, productCode: string) => {
-    // Recall event via server RPC (manufacturer-only, hash chained server-side)
+    // Recall via server RPC — flips status, appends the hash-chained event,
+    // and records the manual_flag alert in the same trusted transaction.
     const event = await recordEvent(productId, "recalled");
     if (!event.success) {
       toast({ title: "Recall rejected", description: event.message ?? "The recalled event could not be recorded.", variant: "destructive" });
       return;
     }
-    const { error: alertError } = await supabase.from("fraud_alerts").insert({
-      product_id: productId, alert_type: "manual_flag", severity: "high",
-      description: `Product ${productCode} recalled by manufacturer`,
-    });
-    if (alertError) {
-      toast({ title: "Event recorded, alert failed", description: alertError.message, variant: "destructive" });
-    } else {
-      toast({ title: "Product recalled", description: "Supply chain event and alert recorded." });
-    }
+    toast({ title: "Product recalled", description: "Supply chain event and fraud alert recorded." });
     fetchProducts();
   };
 

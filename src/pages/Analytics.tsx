@@ -104,7 +104,7 @@ export default function Analytics() {
           .sort((a, b) => b.value - a.value)
       );
 
-    } catch (err) {
+    } catch (err: unknown) {
       toast({ title: "Could not load analytics", description: (err as Error).message, variant: "destructive" });
     }
     setLoading(false);

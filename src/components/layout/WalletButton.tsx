@@ -14,7 +14,7 @@ export function WalletButton() {
     try {
       await connect();
       toast({ title: "Wallet connected", description: "Sepolia anchoring is now available." });
-    } catch (err) {
+    } catch (err: unknown) {
       const werr = toWalletError(err);
       toast({ title: "Wallet connection failed", description: werr.message, variant: "destructive" });
     }
@@ -24,7 +24,7 @@ export function WalletButton() {
     try {
       await switchToSepolia();
       toast({ title: "Network switched", description: "Connected to Sepolia (chain 11155111)." });
-    } catch (err) {
+    } catch (err: unknown) {
       toast({ title: "Could not switch network", description: toWalletError(err).message, variant: "destructive" });
     }
   };

@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setProfile(fetchedProfile);
 
-      } catch (err) {
+      } catch (err: unknown) {
         if (isDev) console.error("[AuthContext] fetchUserData error:", err);
         if (attempt === retries) {
           setRole(null);
