@@ -99,25 +99,20 @@ export default function Alerts() {
     fetchAlerts(1, debouncedSearch, filter, severityFilter);
   }, [debouncedSearch, filter, severityFilter, fetchAlerts]);
 
-  const resolveAlert = async (id: string, productId: string) => {
+  const resolveAlert = async (id: string) => {
     setResolving(id);
-    const [alertRes, productRes] = await Promise.all([
-      supabase.from("fraud_alerts").update({
-        is_resolved: true,
-        resolved_at: new Date().toISOString(),
-        resolved_by: user?.id,
-      }).eq("id", id),
-      supabase.from("products").update({ is_flagged: false, flag_reason: null }).eq("id", productId),
-    ]);
+    // Single admin RPC: resolves the alert and auto-unflags the product
+    // when no unresolved alerts remain (FRD-08) — server-side, atomic.
+    const { data, error } = await supabase.rpc("resolve_fraud_alert", { p_alert_id: id });
 
-    if (alertRes.error) {
-      toast({ title: "Error", description: alertRes.error.message, variant: "destructive" });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      if (productRes.error) {
-        toast({ title: "Alert resolved", description: "Product flag could not be cleared: " + productRes.error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Alert resolved" });
-      }
+      const result = data as { success?: boolean; unflagged?: boolean };
+      toast({
+        title: "Alert resolved",
+        description: result.unflagged ? "No unresolved alerts remain — product unflagged." : undefined,
+      });
       fetchAlerts(page, debouncedSearch, filter, severityFilter);
     }
     setResolving(null);
@@ -226,7 +221,7 @@ export default function Alerts() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => resolveAlert(a.id, a.product_id)}
+                          onClick={() => resolveAlert(a.id)}
                           disabled={resolving === a.id}
                           className="shrink-0 text-xs"
                           style={{ color: "#71ffe8", borderColor: "rgba(113,255,232,0.3)" }}

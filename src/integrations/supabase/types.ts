@@ -645,6 +645,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      resolve_fraud_alert: {
+        Args: { p_alert_id: string }
+        Returns: Json
+      }
       verify_product_secure: {
         Args: {
           p_product_code: string
