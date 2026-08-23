@@ -84,7 +84,9 @@ BEGIN
   WHERE wallet_address = lower(p_wallet_address)
     AND (consumed_at IS NOT NULL OR expires_at < now());
 
-  v_nonce := encode(gen_random_bytes(24), 'hex');
+  -- pgcrypto lives in the `extensions` schema on Supabase; under a pinned
+  -- empty search_path the call must be fully qualified (Rules R2a).
+  v_nonce := encode(extensions.gen_random_bytes(24), 'hex');
 
   INSERT INTO public.wallet_nonces (wallet_address, nonce, expires_at)
   VALUES (lower(p_wallet_address), v_nonce, now() + INTERVAL '10 minutes');

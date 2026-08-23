@@ -20,7 +20,7 @@ BEGIN
     ) VALUES (
       public.system_actor_id(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
       'system@authentichain.internal',
-      crypt(encode(gen_random_bytes(18), 'hex'), gen_salt('bf')),  -- random, unguessable; account is not for login
+      crypt(encode(extensions.gen_random_bytes(18), 'hex'), extensions.gen_salt('bf')),  -- random, unguessable; account is not for login
       now(), now(),
       '{"provider": "email", "providers": ["email"]}'::jsonb,
       '{"full_name": "AuthentiChain System", "is_system": true}'::jsonb,
@@ -69,10 +69,10 @@ BEGIN
     LIMIT 1;
 
     v_event_hash := encode(
-      digest(
+      sha256(convert_to(
         v_product.id::text || '|expired|' || v_system::text || '|' || v_now::text || '|' || COALESCE(v_prev_hash, 'genesis'),
-        'sha256'
-      ),
+        'UTF8'
+      )),
       'hex'
     );
 
@@ -90,7 +90,8 @@ BEGIN
     );
 
     -- Notify the manufacturer in-app (v6 notifications table)
-    INSERT INTO public.notifications (user_id, title, body, type, link)
+    -- NOTE: v6 column names are `message` and `link_url` (NOT body/link).
+    INSERT INTO public.notifications (user_id, title, message, type, link_url)
     VALUES (
       v_product.manufacturer_id,
       'Product auto-expired',

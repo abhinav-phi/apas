@@ -176,10 +176,10 @@ BEGIN
 
   -- ── Server-side hash: SHA-256(product_id | event_type | actor_id | timestamp | previous_hash) ──
   v_event_hash := encode(
-    digest(
+    sha256(convert_to(
       p_product_id::text || '|' || p_event_type || '|' || v_actor::text || '|' || v_now::text || '|' || COALESCE(v_prev_hash, 'genesis'),
-      'sha256'
-    ),
+      'UTF8'
+    )),
     'hex'
   );
 
@@ -307,12 +307,12 @@ BEGIN
   -- Server-computed scanner fingerprint (hashed IP + uid + UA).
   -- Never trusted from the client. (Schema §2.6 / ImplementationPlan 1.2)
   v_device_hash := encode(
-    digest(
+    sha256(convert_to(
       COALESCE(inet_client_addr()::text, 'local') || '|' ||
       COALESCE(auth.uid()::text, 'anon') || '|' ||
       COALESCE(p_user_agent, ''),
-      'sha256'
-    ),
+      'UTF8'
+    )),
     'hex'
   );
 

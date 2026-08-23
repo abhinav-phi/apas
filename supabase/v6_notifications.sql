@@ -3,6 +3,7 @@
 -- 1. Create notifications table
 -- 2. Setup RLS
 -- 3. Trigger to auto-create notification when a fraud_alert is created
+-- SAFE TO RE-RUN.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.notifications (
@@ -19,14 +20,17 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 -- RLS
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications"
   ON public.notifications FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
 CREATE POLICY "Users can update own notifications"
   ON public.notifications FOR UPDATE TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own notifications" ON public.notifications;
 CREATE POLICY "Users can delete own notifications"
   ON public.notifications FOR DELETE TO authenticated
   USING (auth.uid() = user_id);
@@ -36,6 +40,7 @@ CREATE OR REPLACE FUNCTION public.notify_on_fraud_alert()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = ''
 AS $$
 DECLARE
   v_manufacturer_id UUID;
