@@ -23,6 +23,7 @@ import {
   Printer,
   Loader2,
   RotateCcw,
+  WifiOff,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { generateProductCertificate } from "@/lib/pdf";
@@ -72,7 +73,7 @@ type GeoInfo = {
   lng: number | null;
 };
 
-type ViewState = "scanning" | "verifying" | "genuine" | "fake";
+type ViewState = "scanning" | "verifying" | "genuine" | "fake" | "offline";
 
 function extractProductCode(raw: string): string {
   const input = (raw || "").trim();
@@ -172,6 +173,8 @@ export default function Verify() {
   const [query, setQuery] = useState(initialQuery);
   const [viewState, setViewState] = useState<ViewState>("scanning");
   const [result, setResult] = useState<VerifyResult | null>(null);
+  // PWA 4.7: code waiting to be verified once connectivity returns
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [events, setEvents] = useState<Tables<"supply_chain_events">[]>([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -304,6 +307,16 @@ export default function Verify() {
       log("handleVerify called:", { raw, extracted: q });
 
       if (!q) return;
+
+      // PWA 4.7: never render a verdict while offline. Queue the scanned code
+      // and show an honest "will verify once online" state instead of a
+      // misleading verification failure (and never a false genuine/fake call).
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setPendingCode(q);
+        setViewState("offline");
+        return;
+      }
+
       if (isVerifyingRef.current) {
         log("already verifying, skipping");
         return;
@@ -379,6 +392,18 @@ export default function Verify() {
   useEffect(() => {
     handleVerifyRef.current = handleVerify;
   }, [handleVerify]);
+
+  // PWA 4.7: when connectivity returns, automatically flush any queued scan.
+  useEffect(() => {
+    const onOnline = () => {
+      if (!pendingCode) return;
+      const code = pendingCode;
+      setPendingCode(null);
+      handleVerifyRef.current?.(code);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [pendingCode]);
 
   /* ───────── START CAMERA ───────── */
   const startCamera = useCallback(async () => {
@@ -641,7 +666,57 @@ export default function Verify() {
     );
   }
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // VIEW: OFFLINE (PWA 4.7 — queued, never a verdict)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  if (viewState === "offline") {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: "#10141a" }}>
+        <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)" }}>
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2">
+              <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
+              <span className="font-bold text-sm" style={{ color: "#dfe2eb" }}>AuthentiChain</span>
+            </Link>
+          </div>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="text-center max-w-md w-full">
+            <WifiOff className="w-16 h-16 mx-auto mb-4" style={{ color: "#849490" }} />
+            <h1 className="text-2xl font-bold mb-2" style={{ color: "#dfe2eb" }}>
+              Scanned — will verify once online
+            </h1>
+            <p className="mb-6" style={{ color: "#849490" }}>
+              You're offline, so we can't reach the verification service yet. Your scan is queued and will
+              verify automatically the moment your connection returns — we never show a pass or fail
+              verdict without a live check.
+            </p>
+            {pendingCode && (
+              <div className="rounded-lg p-4 mb-6 text-left border" style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(113,255,232,0.06)" }}>
+                <p className="text-xs" style={{ color: "#849490" }}>Queued code</p>
+                <p className="text-sm font-medium" style={{ color: "#71ffe8", fontFamily: "IBM Plex Mono, monospace" }}>{pendingCode}</p>
+              </div>
+            )}
+            <div className="flex flex-col items-center gap-3">
+              <span className="flex items-center gap-1.5 text-xs" style={{ color: "#849490" }}>
+                <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#f9bc48" }} />
+                Waiting for connection…
+              </span>
+              <FlowButton
+                onClick={() => { setPendingCode(null); handleVerifyRef.current?.(pendingCode ?? undefined); }}
+                size="sm"
+                text={<span className="flex items-center gap-1"><RotateCcw className="w-4 h-4" /> Try again</span>}
+              />
+            </div>
+          </div>
+        </div>
+        <AppFooter />
+      </div>
+    );
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // VIEW: FAKE
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (viewState === "fake") {
