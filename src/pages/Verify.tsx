@@ -681,7 +681,7 @@ export default function Verify() {
                         }
                       : null,
                   ]
-                    .filter(Boolean)
+                    .filter((f): f is { label: string; value: string } => f !== null)
                     .map((f) => (
                       <div key={f.label}>
                         <p className="text-xs" style={{ color: "#849490" }}>{f.label}</p>
@@ -791,8 +791,8 @@ export default function Verify() {
                       productName: prod.name,
                       brand: prod.brand,
                       productCode: prod.product_code,
-                      category: prod.category,
-                      verificationHash: prod.verification_hash,
+                      category: prod.category ?? "general",
+                      verificationHash: prod.verification_hash ?? "",
                       trustScore,
                       issueDate: new Date().toISOString()
                     });

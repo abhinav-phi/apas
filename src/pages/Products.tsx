@@ -26,7 +26,7 @@ import {
   publicClient,
   toWalletError,
 } from "@/lib/blockchain";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
 
@@ -342,7 +342,7 @@ export default function Products() {
         const descIdx = headers.indexOf('description');
         const originIdx = headers.indexOf('origin_country');
 
-        const productsToInsert = [];
+        const productsToInsert: TablesInsert<"products">[] = [];
         const ts = new Date().toISOString();
 
         for (let i = 1; i < lines.length; i++) {
