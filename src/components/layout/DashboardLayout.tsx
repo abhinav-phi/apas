@@ -177,7 +177,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           {/* User row */}
           <div className="flex items-center gap-3 mb-3">
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Avatar" className="w-8 h-8 rounded-sm object-cover shrink-0" />
+              <img src={profile.avatar_url} alt="Avatar" decoding="async" className="w-8 h-8 rounded-sm object-cover shrink-0" />
             ) : (
               <div
                 className="w-8 h-8 flex items-center justify-center text-xs font-bold"

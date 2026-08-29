@@ -309,7 +309,7 @@ export default function Settings() {
               <div className="flex items-center gap-4">
                 <div className="relative w-14 h-14 rounded-full overflow-hidden shrink-0" style={{ background: "rgba(113,255,232,0.1)", border: "1px solid rgba(113,255,232,0.2)" }}>
                   {avatarPreview ? (
-                    <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={avatarPreview} alt="Avatar" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-sm font-bold" style={{ color: "#71ffe8", fontFamily: "IBM Plex Mono, monospace" }}>
                       {profileForm.full_name?.charAt(0)?.toUpperCase() || "U"}
