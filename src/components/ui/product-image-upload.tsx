@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Upload, X, ImageIcon, Loader2 } from "lucide-react";
+import { resizeImage, MAX_UPLOAD_BYTES } from "@/lib/image";
 
 interface ProductImageUploadProps {
   productId: string;
@@ -39,12 +40,17 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
     setUploading(true);
 
     try {
-      const ext = file.name.split(".").pop() || "jpg";
+      // R26: compress on-device so storage never holds >1MB images
+      const blob = await resizeImage(file);
+      if (blob.size > MAX_UPLOAD_BYTES) {
+        throw new Error("Image could not be compressed under 1MB — try a smaller image");
+      }
+      const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
       const path = `${user!.id}/${productId}/${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, blob, { upsert: true, contentType: blob.type });
 
       if (uploadError) throw uploadError;
 
@@ -109,7 +115,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
             {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
             {uploading ? "Uploading..." : preview ? "Change" : "Upload Image"}
           </Button>
-          <p className="text-[10px] mt-1" style={{ color: "#5a6a66" }}>Max {MAX_SIZE_MB}MB · JPG/PNG/WEBP</p>
+          <p className="text-[10px] mt-1" style={{ color: "#5a6a66" }}>Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
         </div>
       </div>
     );
@@ -162,7 +168,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
             <>
               <ImageIcon className="w-8 h-8" style={{ color: "rgba(113,255,232,0.4)" }} />
               <p className="text-sm" style={{ color: "#849490" }}>Click or drag to upload product image</p>
-              <p className="text-xs" style={{ color: "#5a6a66" }}>JPG, PNG, WEBP · Max {MAX_SIZE_MB}MB</p>
+              <p className="text-xs" style={{ color: "#5a6a66" }}>JPG, PNG, WEBP · Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
             </>
           )}
         </div>
