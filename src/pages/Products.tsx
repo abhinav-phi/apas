@@ -46,7 +46,7 @@ export default function Products() {
   const { user, role } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { configured, estimateAnchorCost, anchorProduct, anchorProductsBatch, connect, address } = useBlockchain();
+  const { configured, estimateAnchorCost, estimateBatchAnchorCost, anchorProduct, anchorProductsBatch, connect, address } = useBlockchain();
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<Tables<"batches">[]>([]);
   const [search, setSearch] = useState("");
@@ -69,6 +69,10 @@ export default function Products() {
   const [anchorEstimate, setAnchorEstimate] = useState<GasEstimate | null>(null);
   const [anchorBusy, setAnchorBusy] = useState(false);
   const [batchAnchoring, setBatchAnchoring] = useState(false);
+  // Batch anchor confirmation — cost must be shown before signing (4.1 REQUIRED)
+  const [batchAnchorOpen, setBatchAnchorOpen] = useState(false);
+  const [batchEligible, setBatchEligible] = useState<{ id: string; verification_hash: string }[]>([]);
+  const [batchEstimate, setBatchEstimate] = useState<GasEstimate | null>(null);
   // Recall confirmation target — irreversible action must be explicitly confirmed
   const [recallTarget, setRecallTarget] = useState<{ id: string; code: string } | null>(null);
 
@@ -316,23 +320,57 @@ export default function Products() {
     }
   };
 
+  const openBatchAnchorDialog = async () => {
+    try {
+      // The batch is EVERY unanchored product of this manufacturer — not just
+      // the current page — so the real list is fetched server-side.
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, verification_hash")
+        .eq("manufacturer_id", user!.id)
+        .eq("status", "active")
+        .is("blockchain_tx", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const eligible = data ?? [];
+      if (eligible.length === 0) {
+        toast({ title: "Nothing to anchor", description: "Every product already has an on-chain anchor." });
+        return;
+      }
+      setBatchEligible(eligible);
+      setBatchEstimate(null);
+      setBatchAnchorOpen(true);
+      const est = await estimateBatchAnchorCost(
+        eligible.map((p) => ({ id: p.id, verificationHash: p.verification_hash })),
+        "BULK-IMPORT"
+      );
+      setBatchEstimate(est);
+    } catch (err: unknown) {
+      const werr = toWalletError(err);
+      setBatchAnchorOpen(false);
+      if (werr.code === "insufficient_funds") {
+        toast({ title: "Insufficient funds for gas", description: `Top up at ${SEPOLIA_FAUCET_URL}`, variant: "destructive" });
+      } else {
+        toast({ title: "Could not prepare batch anchor", description: werr.message, variant: "destructive" });
+      }
+    }
+  };
+
   const handleBatchAnchor = async () => {
-    const eligible = products.filter(
-      (p) => p.status === "active" && !p.blockchain_tx && p.manufacturer_id === user!.id
-    );
-    if (eligible.length === 0) return;
+    if (batchEligible.length === 0) return;
     setBatchAnchoring(true);
     try {
       if (!address) await connect();
       const result = await anchorProductsBatch(
-        eligible.map((p) => ({ id: p.id, verificationHash: p.verification_hash })),
+        batchEligible.map((p) => ({ id: p.id, verificationHash: p.verification_hash })),
         "BULK-IMPORT"
       );
       toast({
-        title: result.status === "confirmed" ? `✓ ${eligible.length} products anchored` : "Batch transaction reverted",
-        description: `${eligible.length} products in one TX: ${result.txHash.slice(0, 18)}…`,
+        title: result.status === "confirmed" ? `✓ ${batchEligible.length} products anchored` : "Batch transaction reverted",
+        description: `${batchEligible.length} products in one TX: ${result.txHash.slice(0, 18)}…`,
         variant: result.status === "confirmed" ? undefined : "destructive",
       });
+      setBatchAnchorOpen(false);
       fetchProducts();
     } catch (err: unknown) {
       const werr = toWalletError(err);
@@ -579,7 +617,7 @@ export default function Products() {
                 CSV Import
               </Button>
               {configured && unanchoredCount > 1 && (
-                <Button variant="outline" size="sm" onClick={handleBatchAnchor} disabled={batchAnchoring} className="gap-1.5" title="Anchor all unanchored products in a single Sepolia transaction (registerProducts multicall)">
+                <Button variant="outline" size="sm" onClick={openBatchAnchorDialog} disabled={batchAnchoring} className="gap-1.5" title="Anchor all unanchored products in a single Sepolia transaction (registerProducts multicall)">
                   {batchAnchoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
                   Batch Anchor ({unanchoredCount})
                 </Button>
@@ -684,6 +722,44 @@ export default function Products() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Batch anchor confirmation dialog — cost for the WHOLE multicall shown
+            before signing (4.1 REQUIRED, previously only the single anchor had it) */}
+        <Dialog open={batchAnchorOpen} onOpenChange={(open) => { if (!open && !batchAnchoring) setBatchAnchorOpen(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Batch anchor {batchEligible.length} products</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Fuel className="w-3.5 h-3.5" />
+                  {batchEstimate ? (
+                    <span>
+                      Est. cost: <span className="text-foreground font-mono">{batchEstimate.estEth} ETH</span>
+                      <span className="text-muted-foreground">
+                        {" "}for all {batchEligible.length} products in one TX (gas {Number(batchEstimate.gasUnits).toLocaleString()} × EIP-1559 fees)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Estimating gas for the full batch…</span>
+                  )}
+                </div>
+                <p className="text-muted-foreground">
+                  Your wallet will ask you to sign one real <span className="font-mono">registerProducts</span> transaction
+                  covering every unanchored product on Sepolia (chain 11155111). The Etherscan link appears once it is confirmed.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={() => setBatchAnchorOpen(false)} disabled={batchAnchoring}>Cancel</Button>
+                <Button onClick={handleBatchAnchor} disabled={!batchEstimate || batchAnchoring} className="gap-1.5">
+                  {batchAnchoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                  {batchAnchoring ? "Waiting for confirmation…" : "Confirm & Sign"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

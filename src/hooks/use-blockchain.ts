@@ -254,9 +254,36 @@ export function useBlockchain() {
     [ensureReady]
   );
 
-  // Batch variant for CSV bulk imports — one transaction via registerProducts
-  const anchorProductsBatch = useCallback(
+  // Batch cost estimate (4.1 REQUIRED: show cost before submit) — simulates the
+  // full registerProducts multicall so the number covers every product in the TX,
+  // not a single-product sample scaled up.
+  const estimateBatchAnchorCost = useCallback(
     async (
+      products: { id: string; verificationHash: string }[],
+      batchCode: string
+    ): Promise<GasEstimate> => {
+      if (!isBlockchainConfigured()) {
+        throw new WalletError("Contract not configured", "unconfigured");
+      }
+      const ids = products.map((p) => uuidToBytes32(p.id));
+      const hashes = products.map((p) => sha256ToBytes32(p.verificationHash));
+      const gasUnits = await publicClient.estimateContractGas({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: PRODUCT_TRACKER_ABI,
+        functionName: "registerProducts",
+        args: [ids, hashes, batchCode],
+      });
+      const fee = await publicClient.estimateFeesPerGas();
+      const maxFeePerGas = fee.maxFeePerGas ?? 0n;
+      const maxPriorityFeePerGas = fee.maxPriorityFeePerGas ?? 0n;
+      const estEth = Number((gasUnits * maxFeePerGas) / 10n ** 12n) / 1e6; // ETH, 6dp
+      return { gasUnits, maxFeePerGas, maxPriorityFeePerGas, estEth: estEth.toFixed(6) };
+    },
+    []
+  );
+
+  // Batch variant for CSV bulk imports — one transaction via registerProducts
+  const anchorProductsBatch = useCallback(    async (
       products: { id: string; verificationHash: string }[],
       batchCode: string
     ): Promise<AnchorResult> => {
@@ -318,6 +345,7 @@ export function useBlockchain() {
     disconnect,
     switchToSepolia,
     estimateAnchorCost,
+    estimateBatchAnchorCost,
     anchorProduct,
     anchorProductsBatch,
   };
