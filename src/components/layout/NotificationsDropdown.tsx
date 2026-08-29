@@ -139,7 +139,7 @@ export function NotificationsDropdown() {
         </div>
 
         {notifications.length === 0 ? (
-          <div className="p-8 text-center text-sm" style={{ color: "#5a6a66" }}>
+          <div className="p-8 text-center text-sm" style={{ color: "#7d8d88" }}>
             No new notifications
           </div>
         ) : (
@@ -155,7 +155,7 @@ export function NotificationsDropdown() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <p className="text-sm font-medium leading-tight" style={{ color: "#dfe2eb" }}>{n.title}</p>
                     <p className="text-xs leading-snug" style={{ color: "#849490" }}>{n.message}</p>
-                    <p className="text-[10px]" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                    <p className="text-[10px]" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                       {new Date(n.created_at).toLocaleString()}
                     </p>
                   </div>

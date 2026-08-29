@@ -317,8 +317,8 @@ export default function Dashboard() {
                         </p>
                         <p className="text-xs truncate mt-0.5" style={{ color: "#849490" }}>{a.description}</p>
                         <div className="flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" style={{ color: "#5a6a66" }} />
-                          <span className="text-[10px]" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                          <Clock className="w-3 h-3" style={{ color: "#7d8d88" }} />
+                          <span className="text-[10px]" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                             {new Date(a.created_at).toLocaleString()}
                           </span>
                         </div>

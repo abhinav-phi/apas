@@ -168,18 +168,18 @@ export default function MyProducts() {
                     {/* Meta */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <p className="mb-0.5" style={{ color: "#5a6a66" }}>Category</p>
+                        <p className="mb-0.5" style={{ color: "#7d8d88" }}>Category</p>
                         <p className="capitalize" style={{ color: "#849490" }}>{p.category || "—"}</p>
                       </div>
                       <div>
-                        <p className="mb-0.5" style={{ color: "#5a6a66" }}>Scans</p>
+                        <p className="mb-0.5" style={{ color: "#7d8d88" }}>Scans</p>
                         <p className="flex items-center gap-1" style={{ color: "#849490" }}>
                           <QrCode className="w-3 h-3" /> {p.scan_count}
                         </p>
                       </div>
                       {p.last_scanned && (
                         <div className="col-span-2">
-                          <p className="mb-0.5" style={{ color: "#5a6a66" }}>Last Scanned</p>
+                          <p className="mb-0.5" style={{ color: "#7d8d88" }}>Last Scanned</p>
                           <p className="flex items-center gap-1" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>
                             <Clock className="w-3 h-3" /> {new Date(p.last_scanned).toLocaleString()}
                           </p>

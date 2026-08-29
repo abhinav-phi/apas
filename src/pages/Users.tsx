@@ -148,7 +148,7 @@ export default function UsersPage() {
         {/* Search + filter row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#5a6a66" }} />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#7d8d88" }} />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -168,7 +168,7 @@ export default function UsersPage() {
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-xs" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+          <span className="text-xs" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
             {totalCount} user{totalCount === 1 ? "" : "s"}
           </span>
         </div>
@@ -231,7 +231,7 @@ export default function UsersPage() {
                           </td>
                           <td className="px-4 py-3">
                             {isCurrentUser ? (
-                              <span className="text-xs" style={{ color: "#5a6a66" }}>—</span>
+                              <span className="text-xs" style={{ color: "#7d8d88" }}>—</span>
                             ) : (
                               <Select
                                 value={u.role}
@@ -258,7 +258,7 @@ export default function UsersPage() {
                     <td colSpan={5} className="text-center py-12">
                       <Users className="w-10 h-10 mx-auto mb-2" style={{ color: "rgba(132,148,144,0.4)" }} />
                       <p className="text-sm" style={{ color: "#849490" }}>No users found</p>
-                      <p className="text-xs mt-1" style={{ color: "#5a6a66" }}>
+                      <p className="text-xs mt-1" style={{ color: "#7d8d88" }}>
                         {debouncedSearch || roleFilter !== "all"
                           ? "Try adjusting your search or role filter."
                           : "Users appear here after they sign up."}
@@ -273,7 +273,7 @@ export default function UsersPage() {
           {/* Pagination */}
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "rgba(113,255,232,0.06)" }}>
-              <span className="text-xs" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+              <span className="text-xs" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                 Page {page} of {totalPages}
               </span>
               <div className="flex items-center gap-1">

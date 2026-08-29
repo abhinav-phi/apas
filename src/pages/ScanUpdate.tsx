@@ -223,7 +223,7 @@ export default function ScanUpdate() {
                 placeholder="PRD-XXXXXXXX"
                 style={{ fontFamily: "IBM Plex Mono, monospace" }}
               />
-              <p className="text-xs mt-1" style={{ color: "#5a6a66" }}>Scan QR above or type manually</p>
+              <p className="text-xs mt-1" style={{ color: "#7d8d88" }}>Scan QR above or type manually</p>
             </div>
 
             <div>

@@ -106,7 +106,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
           </div>
         ) : (
           <div className="w-12 h-12 rounded-lg border border-dashed border-border flex items-center justify-center shrink-0" style={{ background: "rgba(113,255,232,0.03)" }}>
-            <ImageIcon className="w-5 h-5" style={{ color: "#5a6a66" }} />
+            <ImageIcon className="w-5 h-5" style={{ color: "#7d8d88" }} />
           </div>
         )}
         <div>
@@ -115,7 +115,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
             {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
             {uploading ? "Uploading..." : preview ? "Change" : "Upload Image"}
           </Button>
-          <p className="text-[10px] mt-1" style={{ color: "#5a6a66" }}>Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
+          <p className="text-[10px] mt-1" style={{ color: "#7d8d88" }}>Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
         </div>
       </div>
     );
@@ -168,7 +168,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
             <>
               <ImageIcon className="w-8 h-8" style={{ color: "rgba(113,255,232,0.4)" }} />
               <p className="text-sm" style={{ color: "#849490" }}>Click or drag to upload product image</p>
-              <p className="text-xs" style={{ color: "#5a6a66" }}>JPG, PNG, WEBP · Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
+              <p className="text-xs" style={{ color: "#7d8d88" }}>JPG, PNG, WEBP · Max {MAX_SIZE_MB}MB · auto-compressed to ≤1MB</p>
             </>
           )}
         </div>

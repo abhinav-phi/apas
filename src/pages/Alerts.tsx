@@ -262,7 +262,7 @@ export default function Alerts() {
                           </p>
                         )}
                         <p className="text-xs" style={{ color: "#849490" }}>{a.description}</p>
-                        <p className="text-xs mt-1" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                        <p className="text-xs mt-1" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                           {new Date(a.created_at).toLocaleString()}
                           {a.resolved_at && ` · Resolved ${new Date(a.resolved_at).toLocaleDateString()}`}
                         </p>

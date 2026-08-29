@@ -351,3 +351,26 @@
   display: inline-block;
   animation: animGo 8s var(--animation-iteration);
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   Accessibility (audit: zero focus indicators app-wide, no reduced-motion)
+   ─────────────────────────────────────────────────────────────────────────
+   Keyboard focus visibility for every interactive element that doesn't ship
+   its own focus ring (raw <button>s, links, table rows). :where() keeps the
+   specificity at zero so component-level focus styles always win. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #71ffe8;
+  outline-offset: 2px;
+}
+
+/* Respect the OS "reduce motion" setting: framer-motion entrance animations,
+   tailwind transitions and the landing keyframes all collapse to instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -246,7 +246,7 @@ export default function ProductDetail() {
                     {product.blockchain_tx.substring(0, 24)}...
                   </span>
                 )}
-                <p className="text-xs mt-0.5" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                <p className="text-xs mt-0.5" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                   {product.blockchain_tx_status === "confirmed"
                     ? "Confirmed on Sepolia (Ethereum testnet) — verified on-chain"
                     : product.blockchain_tx_status === "failed"
@@ -440,7 +440,7 @@ export default function ProductDetail() {
                     )}
                   </div>
                   <p className="text-xs mt-1" style={{ color: "#849490" }}>{a.description}</p>
-                  <p className="text-xs mt-1" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                  <p className="text-xs mt-1" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                     {new Date(a.created_at).toLocaleString()}
                   </p>
                 </div>
