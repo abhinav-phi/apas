@@ -27,22 +27,30 @@ export function generateProductHash(data: {
 // R16) — any client-computed hash would be forgeable (no server secret, all
 // fields knowable). Client-submitted hashes are discarded by both RPCs.
 
-export function generateProductCode(): string {
+// Cryptographically-random code generator. The alphabet has 36 chars and
+// 36 × 6 = 216, so bytes < 216 map uniformly onto it; bytes ≥ 216 are
+// rejection-sampled away. This removes both Math.random's modulo bias and its
+// predictability (audit MEDIUM #13 — codes must not be guessable/enumerable).
+function randomCode(prefix: string, length: number): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "PRD-";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  const bytes = new Uint8Array(length);
+  let code = prefix;
+  for (let i = 0; i < length; i++) {
+    crypto.getRandomValues(bytes.subarray(i, i + 1));
+    while (bytes[i] >= 216) {
+      crypto.getRandomValues(bytes.subarray(i, i + 1));
+    }
+    code += chars[bytes[i] % 36];
   }
   return code;
 }
 
+export function generateProductCode(): string {
+  return randomCode("PRD-", 8);
+}
+
 export function generateBatchCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "BAT-";
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
+  return randomCode("BAT-", 6);
 }
 
 export function generateQRData(productCode: string, hash: string): string {

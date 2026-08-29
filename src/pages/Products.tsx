@@ -178,24 +178,41 @@ export default function Products() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const productCode = generateProductCode();
-    const ts = new Date().toISOString();
-    const hash = generateProductHash({ productCode, name: form.name, brand: form.brand, manufacturerId: user!.id, timestamp: ts });
-    const qrData = generateQRData(productCode, hash);
 
-    const { data: inserted, error } = await supabase
-      .from("products")
-      .insert({
-        product_code: productCode, name: form.name, brand: form.brand, category: form.category,
-        description: form.description || null, origin_country: form.origin_country || null,
-        manufacture_date: form.manufacture_date || null, expiry_date: form.expiry_date || null,
-        batch_id: form.batch_id || null, manufacturer_id: user!.id, verification_hash: hash, qr_data: qrData,
-      })
-      .select("id")
-      .single();
+    // Product codes are 8 random characters. On the rare unique-constraint
+    // collision, regenerate the code and retry instead of surfacing a raw DB
+    // error to the user (audit MEDIUM #13).
+    let productCode = generateProductCode();
+    let inserted: { id: string } | null = null;
+    let failure: string | null = null;
+    for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+      const ts = new Date().toISOString();
+      const hash = generateProductHash({ productCode, name: form.name, brand: form.brand, manufacturerId: user!.id, timestamp: ts });
+      const qrData = generateQRData(productCode, hash);
+      const { data, error } = await supabase
+        .from("products")
+        .insert({
+          product_code: productCode, name: form.name, brand: form.brand, category: form.category,
+          description: form.description || null, origin_country: form.origin_country || null,
+          manufacture_date: form.manufacture_date || null, expiry_date: form.expiry_date || null,
+          batch_id: form.batch_id || null, manufacturer_id: user!.id, verification_hash: hash, qr_data: qrData,
+        })
+        .select("id")
+        .single();
+      if (!error && data) {
+        inserted = data;
+        break;
+      }
+      if (error && error.code === "23505" && attempt < 2) {
+        productCode = generateProductCode(); // collision — fresh code, retry
+        continue;
+      }
+      failure = error?.message ?? "Could not register product";
+      break;
+    }
 
-    if (error || !inserted) {
-      toast({ title: "Error", description: error?.message ?? "Could not register product", variant: "destructive" });
+    if (!inserted) {
+      toast({ title: "Error", description: failure ?? "Could not register product", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
@@ -514,13 +531,37 @@ export default function Products() {
           );
         }
 
-        // Chunked inserts — one giant payload gets rejected by PostgREST
+        // Chunked inserts — one giant payload gets rejected by PostgREST. A
+        // unique-code collision inside a chunk fails the whole chunk, so the
+        // chunk's codes are regenerated and retried (max 2 retries).
         const insertedProducts: { id: string }[] = [];
         for (let start = 0; start < productsToInsert.length; start += CSV_CHUNK_SIZE) {
           const chunk = productsToInsert.slice(start, start + CSV_CHUNK_SIZE);
-          const { data, error } = await supabase.from("products").insert(chunk).select("id");
-          if (error) throw error;
-          if (data) insertedProducts.push(...(data as { id: string }[]));
+          let data: { id: string }[] | null = null;
+          let failure: string | null = null;
+          for (let attempt = 0; attempt < 3 && !data; attempt++) {
+            const res = await supabase.from("products").insert(chunk).select("id");
+            if (!res.error) {
+              data = res.data as { id: string }[];
+              break;
+            }
+            if (res.error.code === "23505" && attempt < 2) {
+              const ts = new Date().toISOString();
+              for (const row of chunk) {
+                row.product_code = generateProductCode();
+                row.verification_hash = generateProductHash({
+                  productCode: row.product_code, name: row.name, brand: row.brand,
+                  manufacturerId: user!.id, timestamp: ts,
+                });
+                row.qr_data = generateQRData(row.product_code, row.verification_hash);
+              }
+              continue;
+            }
+            failure = res.error.message;
+            break;
+          }
+          if (failure) throw new Error(failure);
+          if (data) insertedProducts.push(...data);
         }
 
         // Genesis events via server RPC (hash chain computed server-side)
