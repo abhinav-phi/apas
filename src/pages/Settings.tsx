@@ -143,13 +143,22 @@ export default function Settings() {
       const valid = await verifyMessage({ address: walletAddress as `0x${string}`, message, signature });
       if (!valid) throw new Error("Signature did not verify against the wallet address");
 
-      const { error: linkError } = await supabase.rpc("link_wallet_address", {
-        p_wallet_address: walletAddress,
-        p_nonce: nonce,
-        p_signature: signature,
-        p_chain_id: SEPOLIA_CHAIN_ID,
+      // Prefer server-side verification (audit MEDIUM #7): the edge function
+      // recovers the signer from the signature itself, so a verified mapping can
+      // only be created by whoever holds the key — the bare RPC never checked the
+      // signature. Falls back to the RPC while the function isn't deployed.
+      const { error: fnError } = await supabase.functions.invoke("verify-wallet-link", {
+        body: { walletAddress, nonce, signature, chainId: SEPOLIA_CHAIN_ID },
       });
-      if (linkError) throw new Error(linkError.message);
+      if (fnError) {
+        const { error: linkError } = await supabase.rpc("link_wallet_address", {
+          p_wallet_address: walletAddress,
+          p_nonce: nonce,
+          p_signature: signature,
+          p_chain_id: SEPOLIA_CHAIN_ID,
+        });
+        if (linkError) throw new Error(linkError.message);
+      }
 
       toast({ title: "Wallet linked", description: `${shortAddress(walletAddress)} is now verified for on-chain actions.` });
       await fetchWallet();
