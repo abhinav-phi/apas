@@ -11,39 +11,41 @@ import { FlowButton } from "@/components/ui/flow-button";
 import { NotificationsDropdown } from "./NotificationsDropdown";
 import { WalletButton } from "./WalletButton";
 
-const SETTINGS_ITEM = { label: "Settings", path: "/settings", icon: <Settings className="w-4 h-4" /> };
+const SETTINGS_ITEM = { tKey: "nav.settings", path: "/settings", icon: <Settings className="w-4 h-4" /> };
 
-const roleNavItems: Record<string, { label: string; path: string; icon: ReactNode }[]> = {
+// Labels are i18n keys resolved at render time (nav.* in src/lib/i18n.ts) so
+// the sidebar follows the selected language (audit i18n item).
+const roleNavItems: Record<string, { tKey: string; path: string; icon: ReactNode }[]> = {
   manufacturer: [
-    { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
-    { label: "Products", path: "/products", icon: <Package className="w-4 h-4" /> },
-    { label: "Batches", path: "/batches", icon: <FileText className="w-4 h-4" /> },
-    { label: "Transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
-    { label: "QR Codes", path: "/qr-codes", icon: <QrCode className="w-4 h-4" /> },
-    { label: "Supply Chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
-    { label: "Alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
+    { tKey: "nav.dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
+    { tKey: "nav.products", path: "/products", icon: <Package className="w-4 h-4" /> },
+    { tKey: "nav.batches", path: "/batches", icon: <FileText className="w-4 h-4" /> },
+    { tKey: "nav.transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
+    { tKey: "nav.qr_codes", path: "/qr-codes", icon: <QrCode className="w-4 h-4" /> },
+    { tKey: "nav.supply_chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
+    { tKey: "nav.alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
     SETTINGS_ITEM,
   ],
   supplier: [
-    { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
-    { label: "Scan & Update", path: "/scan-update", icon: <QrCode className="w-4 h-4" /> },
-    { label: "Transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
-    { label: "Supply Chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
+    { tKey: "nav.dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
+    { tKey: "nav.scan_update", path: "/scan-update", icon: <QrCode className="w-4 h-4" /> },
+    { tKey: "nav.transfer", path: "/transfer-ownership", icon: <Send className="w-4 h-4" /> },
+    { tKey: "nav.supply_chain", path: "/supply-chain", icon: <Truck className="w-4 h-4" /> },
     SETTINGS_ITEM,
   ],
   customer: [
-    { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
-    { label: "Verify Product", path: "/verify", icon: <Shield className="w-4 h-4" /> },
-    { label: "My Products", path: "/my-products", icon: <Package className="w-4 h-4" /> },
+    { tKey: "nav.dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
+    { tKey: "nav.verify_product", path: "/verify", icon: <Shield className="w-4 h-4" /> },
+    { tKey: "nav.my_products", path: "/my-products", icon: <Package className="w-4 h-4" /> },
     SETTINGS_ITEM,
   ],
   admin: [
-    { label: "Dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
-    { label: "Products", path: "/products", icon: <Package className="w-4 h-4" /> },
-    { label: "Users", path: "/users", icon: <Users className="w-4 h-4" /> },
-    { label: "Fraud Alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
-    { label: "Analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" /> },
-    { label: "Audit Logs", path: "/audit-logs", icon: <FileText className="w-4 h-4" /> },
+    { tKey: "nav.dashboard", path: "/dashboard", icon: <Home className="w-4 h-4" /> },
+    { tKey: "nav.products", path: "/products", icon: <Package className="w-4 h-4" /> },
+    { tKey: "nav.users", path: "/users", icon: <Users className="w-4 h-4" /> },
+    { tKey: "nav.fraud_alerts", path: "/alerts", icon: <AlertTriangle className="w-4 h-4" /> },
+    { tKey: "nav.analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" /> },
+    { tKey: "nav.audit_logs", path: "/audit-logs", icon: <FileText className="w-4 h-4" /> },
     SETTINGS_ITEM,
   ],
 };
@@ -69,7 +71,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navItems = role ? roleNavItems[role] || [] : [];
   
   const toggleLanguage = () => {
@@ -144,7 +146,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.color = '#849490'; (e.currentTarget as HTMLElement).style.background = 'transparent'; } }}
               >
                 {item.icon}
-                <span style={{ fontFamily: 'Geist Sans, sans-serif', fontWeight: isActive ? 500 : 400 }}>{item.label}</span>
+                <span style={{ fontFamily: 'Geist Sans, sans-serif', fontWeight: isActive ? 500 : 400 }}>{t(item.tKey)}</span>
                 {isActive && <ChevronRight className="w-3 h-3 ml-auto" style={{ color: '#71ffe8' }} />}
               </Link>
             );
@@ -201,7 +203,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               onClick={handleSignOut}
               size="sm"
               className="opacity-70 hover:opacity-100"
-              text={<span className="flex items-center gap-2"><LogOut className="w-3.5 h-3.5" /> SIGN OUT</span>}
+              text={<span className="flex items-center gap-2"><LogOut className="w-3.5 h-3.5" /> {t("common.signout").toUpperCase()}</span>}
             />
           </div>
         </div>
