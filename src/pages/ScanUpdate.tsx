@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Send, QrCode, X, MapPin, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Html5Qrcode } from "html5-qrcode";
+import { useQrScanner } from "@/hooks/use-qr-scanner";
 
 const EVENT_LABELS: Record<string, string> = {
   in_transit: "In Transit",
@@ -26,62 +26,35 @@ export default function ScanUpdate() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
   const scanDivId = "sc-qr-scanner";
+
+  // Shared scanner lifecycle (single-fire decode, stop-on-success, cleanup)
+  const { active: scanning, start: startScanner, stop: stopScanner } = useQrScanner({
+    containerId: scanDivId,
+    onDecode: (decodedText) => {
+      // Extract product code from verify URL if needed
+      let code = decodedText;
+      try {
+        const url = new URL(decodedText);
+        const qp = url.searchParams.get("code");
+        if (qp) code = qp;
+      } catch {
+        // not a URL, use as-is
+      }
+      setProductCode(code);
+      toast({ title: "QR scanned", description: `Code: ${code}` });
+    },
+    onError: (message) => {
+      toast({ title: "Camera error", description: message, variant: "destructive" });
+    },
+  });
 
   useEffect(() => {
     document.title = "Scan & Update — AuthentiChain";
-    return () => {
-      stopScanner();
-    };
   }, []);
-
-  const startScanner = async () => {
-    setScanning(true);
-    try {
-      const scanner = new Html5Qrcode(scanDivId);
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 12, qrbox: { width: 240, height: 240 } },
-        (decodedText) => {
-          // Extract product code from verify URL if needed
-          let code = decodedText;
-          try {
-            const url = new URL(decodedText);
-            const qp = url.searchParams.get("code");
-            if (qp) code = qp;
-          } catch {
-            // not a URL, use as-is
-          }
-          setProductCode(code);
-          stopScanner();
-          toast({ title: "QR scanned", description: `Code: ${code}` });
-        },
-        undefined
-      );
-    } catch (err: unknown) {
-      setScanning(false);
-      toast({ title: "Camera error", description: (err as Error).message || "Could not access camera", variant: "destructive" });
-    }
-  };
-
-  const stopScanner = () => {
-    const scanner = scannerRef.current;
-    if (scanner) {
-      scanner.stop().catch(() => {}).finally(() => {
-        scanner.clear();
-        scannerRef.current = null;
-        setScanning(false);
-      });
-    } else {
-      setScanning(false);
-    }
-  };
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
