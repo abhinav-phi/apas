@@ -211,7 +211,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 lg:hidden"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -224,7 +224,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           style={{ background: '#10141a', borderBottom: '1px solid rgba(113,255,232,0.08)' }}
         >
           <button
-            className="lg:hidden p-2 transition-colors"
+            className="lg:hidden flex items-center justify-center min-h-[44px] min-w-[44px] p-2 transition-colors"
             style={{ color: '#849490' }}
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
@@ -251,7 +251,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <button
             onClick={toggleLanguage}
             aria-label="Switch language"
-            className="flex items-center gap-1.5 px-3 py-1.5 transition-colors hover:bg-muted/50 rounded-md"
+            className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] transition-colors hover:bg-muted/50 rounded-md"
             style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}
           >
             <Globe className="w-3.5 h-3.5" />

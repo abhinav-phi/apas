@@ -36,7 +36,7 @@ export function AppHeader({ variant = "default" }: { variant?: "default" | "dark
       className="sticky top-0 z-50 transition-colors"
       style={{
         background: 'rgba(16,20,26,0.95)',
-        backdropFilter: 'blur(12px)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(113,255,232,0.08)',
       }}
     >

@@ -724,7 +724,7 @@ export default function Verify() {
     const FakeIcon = fakeInfo.icon;
     return (
       <div className="min-h-screen flex flex-col" style={{ background: "#10141a" }}>
-        <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)" }}>
+        <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}>
           <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
               <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
@@ -835,7 +835,7 @@ export default function Verify() {
 
         {/* Screen view */}
         <div className="print:hidden">
-          <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)" }}>
+          <header className="border-b" style={{ background: "rgba(22,27,34,0.8)", borderColor: "rgba(113,255,232,0.1)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}>
             <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
               <Link to="/" className="flex items-center gap-2">
                 <img src="/apas.png" alt="AuthentiChain Logo" className="w-8 h-8 object-contain rounded-sm" />
