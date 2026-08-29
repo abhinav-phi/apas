@@ -70,11 +70,32 @@ export function NotificationsDropdown() {
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && unreadCount > 0 && userId) {
-      // Mark all as read locally instantly
+      // Mark all as read locally instantly, then persist. R10: no
+      // fire-and-forget — on failure the optimistic state is reverted so the
+      // UI can't claim "read" while the DB still says unread.
+      const previouslyUnread = notifications.filter((n) => !n.is_read);
+      const failedIds = new Set(previouslyUnread.map((n) => n.id));
       setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      // Update DB in background
-      supabase.from("notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false).then();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+
+      void (async () => {
+        const { error } = await supabase
+          .from("notifications")
+          .update({ is_read: true })
+          .eq("user_id", userId)
+          .eq("is_read", false);
+        if (error) {
+          setNotifications((prev) =>
+            prev.map((n) => (failedIds.has(n.id) ? { ...n, is_read: false } : n))
+          );
+          setUnreadCount(previouslyUnread.length);
+          toast({
+            title: "Could not mark notifications as read",
+            description: error.message,
+            variant: "destructive",
+          });
+        }
+      })();
     }
   };
 
