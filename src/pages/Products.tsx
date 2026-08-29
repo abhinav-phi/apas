@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { PaginationBar } from "@/components/ui/pagination-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateProductCode, generateProductHash, generateQRData } from "@/lib/hash";
 import {
@@ -67,6 +68,8 @@ export default function Products() {
   const [anchorEstimate, setAnchorEstimate] = useState<GasEstimate | null>(null);
   const [anchorBusy, setAnchorBusy] = useState(false);
   const [batchAnchoring, setBatchAnchoring] = useState(false);
+  // Recall confirmation target — irreversible action must be explicitly confirmed
+  const [recallTarget, setRecallTarget] = useState<{ id: string; code: string } | null>(null);
 
   // Latest filter/page values held in refs so fetchProducts can stay a stable
   // callback (deps: user/role/toast) while still reading fresh inputs.
@@ -348,9 +351,11 @@ export default function Products() {
     const event = await recordEvent(productId, "recalled");
     if (!event.success) {
       toast({ title: "Recall rejected", description: event.message ?? "The recalled event could not be recorded.", variant: "destructive" });
+      setRecallTarget(null);
       return;
     }
     toast({ title: "Product recalled", description: "Supply chain event and fraud alert recorded." });
+    setRecallTarget(null);
     fetchProducts();
   };
 
@@ -682,7 +687,7 @@ export default function Products() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               {p.status === "active" && (
-                                <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleRecall(p.id, p.product_code); }}>Recall</Button>
+                                <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); setRecallTarget({ id: p.id, code: p.product_code }); }}>Recall</Button>
                               )}
                             </div>
                           </td>
@@ -707,6 +712,28 @@ export default function Products() {
           isLoading={loading}
         />
       </div>
+
+      <AlertDialog open={!!recallTarget} onOpenChange={(o) => { if (!o) setRecallTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Recall product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently marks <span className="font-mono">{recallTarget?.code}</span> as recalled and
+              files a fraud alert. This action is <strong>irreversible</strong> — the product can no longer be
+              verified as genuine. Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (recallTarget) handleRecall(recallTarget.id, recallTarget.code); }}
+            >
+              Yes, recall product
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
