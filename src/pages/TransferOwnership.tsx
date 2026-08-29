@@ -204,7 +204,7 @@ export default function TransferOwnership() {
                 required
                 placeholder="recipient@example.com"
               />
-              <p className="text-xs mt-1" style={{ color: "#5a6a66" }}>
+              <p className="text-xs mt-1" style={{ color: "#7d8d88" }}>
                 Recipient must have an AuthentiChain account
               </p>
             </div>
@@ -284,15 +284,15 @@ export default function TransferOwnership() {
                         </span>
                       </div>
                       <p className="text-xs mt-0.5" style={{ color: "#849490" }}>{typeLabel}</p>
-                      {tx.notes && <p className="text-xs mt-0.5 italic" style={{ color: "#5a6a66" }}>{tx.notes}</p>}
+                      {tx.notes && <p className="text-xs mt-0.5 italic" style={{ color: "#7d8d88" }}>{tx.notes}</p>}
                       <div className="flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3" style={{ color: "#5a6a66" }} />
-                        <span className="text-[10px]" style={{ color: "#5a6a66", fontFamily: "IBM Plex Mono, monospace" }}>
+                        <Clock className="w-3 h-3" style={{ color: "#7d8d88" }} />
+                        <span className="text-[10px]" style={{ color: "#7d8d88", fontFamily: "IBM Plex Mono, monospace" }}>
                           {new Date(tx.created_at).toLocaleString()}
                         </span>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono truncate max-w-[80px]" style={{ color: "#5a6a66" }} title={tx.transfer_hash}>
+                    <span className="text-[10px] font-mono truncate max-w-[80px]" style={{ color: "#7d8d88" }} title={tx.transfer_hash}>
                       {tx.transfer_hash.substring(0, 8)}...
                     </span>
                   </div>
