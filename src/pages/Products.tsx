@@ -221,23 +221,44 @@ export default function Products() {
     }
   };
 
-  // Re-check a TX that is still marked pending (mined since last check?)
+  // Re-check a TX that is still marked pending. Prefers the server-side
+  // Edge Function (authoritative receipt verification, audit F4 residual);
+  // falls back to a direct public-RPC read when the function is not deployed.
   const handleRecheckPending = async (product: Product) => {
     if (!product.blockchain_tx) return;
-    try {
-      const receipt = await publicClient.getTransactionReceipt({ hash: product.blockchain_tx as `0x${string}` });
-      const status = receipt.status === "success" ? "confirmed" : "failed";
-      await supabase.rpc("record_blockchain_anchor", {
-        p_product_id: product.id, p_tx_hash: product.blockchain_tx, p_status: status,
+    const txHash = product.blockchain_tx;
+    const applyStatus = async (status: "confirmed" | "failed") => {
+      const { error } = await supabase.rpc("record_blockchain_anchor", {
+        p_product_id: product.id, p_tx_hash: txHash, p_status: status,
       });
+      if (error) throw new Error(error.message);
       toast({
         title: status === "confirmed" ? "✓ Anchor confirmed" : "Anchor failed on-chain",
-        description: status === "confirmed" ? etherscanTxUrl(product.blockchain_tx) : "The transaction reverted.",
+        description: status === "confirmed" ? etherscanTxUrl(txHash) : "The transaction reverted.",
         variant: status === "confirmed" ? undefined : "destructive",
       });
       fetchProducts();
+    };
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-anchor-receipt", {
+        body: { productId: product.id, txHash },
+      });
+      if (error) throw new Error(error.message);
+      const result = data as { ok: boolean; mined: boolean; status?: "confirmed" | "failed"; reason?: string };
+      if (!result.ok) throw new Error(result.reason ?? "Verification failed");
+      if (!result.mined) {
+        toast({ title: "Still pending", description: "The transaction has not been mined yet — check again shortly." });
+        return;
+      }
+      await applyStatus(result.status ?? "failed");
     } catch {
-      toast({ title: "Still pending", description: "The transaction has not been mined yet — check again shortly." });
+      // Edge Function unavailable (not deployed) — public-RPC fallback
+      try {
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+        await applyStatus(receipt.status === "success" ? "confirmed" : "failed");
+      } catch {
+        toast({ title: "Still pending", description: "The transaction has not been mined yet — check again shortly." });
+      }
     }
   };
 

@@ -198,6 +198,25 @@ manufacturer address. This runs the signed-nonce challenge
 (`request_wallet_nonce` → sign → `link_wallet_address`) and stores the verified
 mapping used for on-chain-facing actions (signed-message challenge flow).
 
+### D4. Deploy the receipt-verification Edge Function (optional but recommended)
+
+`supabase/functions/verify-anchor-receipt` independently confirms anchoring
+transactions server-side (audit F4 residual). Until it is deployed, anchor
+status is manufacturer-asserted by the browser with a public-RPC fallback —
+the app works either way, but deployment makes `blockchain_tx_status`
+authoritative.
+
+```powershell
+supabase functions deploy verify-anchor-receipt
+# Optional: pin the RPC used for receipt reads (defaults to rpc.sepolia.org)
+supabase secrets set SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<key>
+# Optional: reject receipts whose TX did not target ProductTracker
+supabase secrets set ANCHOR_CONTRACT_ADDRESS=0x<deployed-address>
+```
+
+The frontend calls it automatically on the "Pending" badge re-check and falls
+back to a direct public-RPC read when the function is not deployed.
+
 ---
 
 ## Step E — Terminal Commands
@@ -241,3 +260,4 @@ npm run dev
 | Environment keys (C) | App won't start (Supabase) or anchoring stays disabled (contract/RPC) |
 | Faucet ETH + role grant (D) | Anchor button fails with insufficient funds / `Unauthorized` revert |
 | Wallet linking (D3) | On-chain actions can't be tied to your account |
+| Edge Function (D4) | Anchor status stays manufacturer-asserted (public-RPC fallback still works) |
