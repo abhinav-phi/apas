@@ -156,7 +156,23 @@ export function useBlockchain() {
     setState((s) => ({ ...s, chainId, wrongNetwork: chainId !== SEPOLIA_CHAIN_ID }));
   }, []);
 
-  const disconnect = useCallback(() => {
+  // Honest disconnect (audit UX item: the button used to claim "disconnect"
+  // while MetaMask stayed connected — only local state was cleared). The
+  // closest honest primitive is EIP-2255 wallet_revokePermissions, which makes
+  // the site lose account access in MetaMask-family wallets; it is best-effort
+  // (unsupported by some wallets, user-confirmable), and local state is cleared
+  // regardless so the UI never lies about being connected.
+  const disconnect = useCallback(async () => {
+    try {
+      const eth = (
+        window as unknown as {
+          ethereum?: { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+        }
+      ).ethereum;
+      await eth?.request?.({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+    } catch {
+      // Unsupported or rejected by the user — local state is still cleared below
+    }
     setState((s) => ({ ...s, address: null, chainId: null, wrongNetwork: false }));
   }, []);
 
