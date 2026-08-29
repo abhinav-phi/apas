@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -35,14 +36,30 @@ const PAGE_SIZE = 20;
 export default function Alerts() {
   const { user, role } = useAuth();
   const { toast } = useToast();
+
+  // Filters live in the URL (?q=&status=&severity=&page=) so views are
+  // shareable/deep-linkable and the back button restores them. Values from the
+  // URL are validated against the allowed sets.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const STATUSES = ["all", "unresolved", "resolved"] as const;
+  const SEVERITIES = ["all", "critical", "high", "medium", "low"];
+
+  const urlStatus = searchParams.get("status") as (typeof STATUSES)[number] | null;
+  const urlSeverity = searchParams.get("severity") ?? "all";
+  const urlPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
+
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(Number.isFinite(urlPage) && urlPage > 0 ? urlPage : 1);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "unresolved" | "resolved">("unresolved");
-  const [severityFilter, setSeverityFilter] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [filter, setFilter] = useState<"all" | "unresolved" | "resolved">(
+    urlStatus && STATUSES.includes(urlStatus) ? urlStatus : "unresolved"
+  );
+  const [severityFilter, setSeverityFilter] = useState(
+    SEVERITIES.includes(urlSeverity) ? urlSeverity : "all"
+  );
   const debouncedSearch = useDebounce(search, 300);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -105,8 +122,22 @@ export default function Alerts() {
 
   useEffect(() => {
     document.title = "Alerts — AuthentiChain";
-    fetchAlerts(1, debouncedSearch, filter, severityFilter);
-  }, [debouncedSearch, filter, severityFilter, fetchAlerts]);
+  }, []);
+
+  // Fetch on mount (deep-linked page included) and whenever any input changes.
+  useEffect(() => {
+    fetchAlerts(page, debouncedSearch, filter, severityFilter);
+  }, [page, debouncedSearch, filter, severityFilter, fetchAlerts]);
+
+  // Mirror the active view into the URL (replace: no history spam per keystroke)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (filter !== "unresolved") params.set("status", filter);
+    if (severityFilter !== "all") params.set("severity", severityFilter);
+    if (page > 1) params.set("page", String(page));
+    setSearchParams(params, { replace: true });
+  }, [search, filter, severityFilter, page, setSearchParams]);
 
   // FRD-06 (P0): real-time fraud-alert feed. Re-fetch the current view on any
   // insert/update so new alerts surface without a manual page refresh. RLS
@@ -188,10 +219,10 @@ export default function Alerts() {
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Search alerts..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-9" placeholder="Search alerts..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
 
-          <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+          <Select value={filter} onValueChange={(v) => { setFilter(v as typeof filter); setPage(1); }}>
             <SelectTrigger className="w-[140px]">
               <Filter className="w-3.5 h-3.5 mr-1" /><SelectValue />
             </SelectTrigger>
@@ -202,7 +233,7 @@ export default function Alerts() {
             </SelectContent>
           </Select>
 
-          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+          <Select value={severityFilter} onValueChange={(v) => { setSeverityFilter(v); setPage(1); }}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Severity" />
             </SelectTrigger>
@@ -289,7 +320,7 @@ export default function Alerts() {
                 totalPages={totalPages}
                 totalCount={totalCount}
                 pageSize={PAGE_SIZE}
-                onPageChange={(p) => fetchAlerts(p, debouncedSearch, filter, severityFilter)}
+                onPageChange={setPage}
                 isLoading={loading}
               />
             </>
