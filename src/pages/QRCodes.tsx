@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { QRCodeCanvas } from "qrcode.react";
-import { Package, Download, Copy, CheckCircle2 } from "lucide-react";
+import { Package, Download, Copy, CheckCircle2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PaginationBar } from "@/components/ui/pagination-bar";
+import { useDebounce } from "@/hooks/use-debounce";
+
+const PAGE_SIZE = 24;
 
 export default function QRCodes() {
   const { user } = useAuth();
@@ -18,30 +23,53 @@ export default function QRCodes() {
   const [products, setProducts] = useState<QrProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const debouncedSearch = useDebounce(search, 300);
+
+  // Latest filter/page values in refs so fetchProducts stays a stable callback.
+  const pageRef = useRef(page); pageRef.current = page;
+  const searchRef = useRef(debouncedSearch); searchRef.current = debouncedSearch;
 
   const getVerifyUrl = (productCode: string) =>
     `${window.location.origin}/verify?code=${productCode}`;
 
-  useEffect(() => {
+  const fetchProducts = useCallback(async () => {
     const userId = user?.id;
     if (!userId) return;
-    document.title = "QR Codes — AuthentiChain";
-    const fetchProducts = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, product_code, brand")
-        .eq("manufacturer_id", userId)
-        .order("created_at", { ascending: false });
-      if (error) {
-        setProducts([]);
-      } else if (data) {
-        setProducts(data);
-      }
-      setLoading(false);
-    };
-    fetchProducts();
+    setLoading(true);
+    // R20: one bounded, counted page — never pull the full product list to render
+    // thousands of QR canvases at once.
+    const term = (searchRef.current || "").trim();
+    const from = (pageRef.current - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    let q = supabase
+      .from("products")
+      .select("id, name, product_code, brand", { count: "exact" })
+      .eq("manufacturer_id", userId)
+      .order("created_at", { ascending: false });
+    if (term) {
+      const t = term.replace(/\\/g, "\\\\").replace(/%/g, "\\%");
+      q = q.or(`name.ilike.%${t}%,product_code.ilike.%${t}%,brand.ilike.%${t}%`);
+    }
+    q = q.range(from, to);
+    const { data, error, count } = await q;
+    if (error) setProducts([]);
+    else setProducts(data as QrProduct[]);
+    setTotalCount(count || 0);
+    setLoading(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    document.title = "QR Codes — AuthentiChain";
+  }, []);
+  useEffect(() => {
+    fetchProducts();
+  }, [page, debouncedSearch, fetchProducts]);
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const downloadQR = (productCode: string, productName: string) => {
     const canvas = document.getElementById(
@@ -132,6 +160,11 @@ export default function QRCodes() {
           </p>
         </div>
 
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => (
@@ -219,6 +252,15 @@ export default function QRCodes() {
             </>
           )}
         </div>
+
+        <PaginationBar
+          page={page}
+          totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+          isLoading={loading}
+        />
       </div>
     </DashboardLayout>
   );
