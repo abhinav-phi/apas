@@ -281,7 +281,7 @@ export default function ProductDetail() {
             {role !== "manufacturer" && product.image_url && (
               <div className="pt-3 border-t border-border">
                 <p className="text-xs mb-2" style={{ color: "#849490", fontFamily: "IBM Plex Mono, monospace" }}>Product Image</p>
-                <img src={product.image_url} alt={product.name} className="w-full max-h-40 object-cover rounded-lg" />
+                <img src={product.image_url} alt={product.name} loading="lazy" decoding="async" className="w-full max-h-40 object-cover rounded-lg" />
               </div>
             )}
           </div>

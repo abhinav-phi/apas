@@ -93,7 +93,7 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
       <div className="flex items-center gap-3">
         {preview ? (
           <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0">
-            <img src={preview} alt="Product" className="w-full h-full object-cover" />
+            <img src={preview} alt="Product" loading="lazy" decoding="async" className="w-full h-full object-cover" />
             {!uploading && (
               <button
                 type="button"
@@ -128,6 +128,8 @@ export function ProductImageUpload({ productId, currentImageUrl, onUploaded, com
           <img
             src={preview}
             alt="Product"
+            loading="lazy"
+            decoding="async"
             className="w-full max-h-56 object-cover"
           />
           {uploading && (
