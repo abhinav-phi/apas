@@ -217,6 +217,24 @@ supabase secrets set ANCHOR_CONTRACT_ADDRESS=0x<deployed-address>
 The frontend calls it automatically on the "Pending" badge re-check and falls
 back to a direct public-RPC read when the function is not deployed.
 
+### D5. Deploy the wallet-link verification Edge Function (required for audit #7 fix)
+
+`supabase/functions/verify-wallet-link` performs the **server-side ECDSA
+verification** of the wallet-linking signature. Without it, the
+`link_wallet_address` RPC only format-checks the signature — anyone calling that
+RPC directly could bind an arbitrary wallet address to their account. The
+frontend prefers this function and falls back to the RPC only while it is not
+deployed, so the app works either way.
+
+```powershell
+supabase functions deploy verify-wallet-link
+# No extra secrets needed: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected
+# automatically by Supabase. ethers is bundled from npm:ethers@6 at deploy time.
+```
+
+After deployment the "verified wallet" mapping is a server-attested fact;
+optionally revoke direct RPC access to `link_wallet_address` for full closure.
+
 ---
 
 ## Step E — Terminal Commands
