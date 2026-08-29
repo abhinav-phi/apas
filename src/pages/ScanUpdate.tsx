@@ -110,7 +110,7 @@ export default function ScanUpdate() {
     setLoading(true);
     setSuccess(false);
 
-    let product = null;
+    let product: { id: string; product_code: string } | null = null;
     const { data: p1, error: err1 } = await supabase.from("products").select("id, product_code").eq("product_code", productCode.trim()).maybeSingle();
     product = p1;
     if (!product && !err1) {

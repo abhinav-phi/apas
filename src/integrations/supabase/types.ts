@@ -609,10 +609,10 @@ export type Database = {
         Args: {
           p_product_id: string
           p_event_type: string
-          p_location?: string
-          p_latitude?: number
-          p_longitude?: number
-          p_notes?: string
+          p_location?: string | null
+          p_latitude?: number | null
+          p_longitude?: number | null
+          p_notes?: string | null
         }
         Returns: Json
       }

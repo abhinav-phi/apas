@@ -94,7 +94,7 @@ export default function TransferOwnership() {
       p_product_id: form.product_id,
       p_to_email: form.to_email.trim().toLowerCase(),
       p_transfer_type: form.transfer_type,
-      p_notes: form.notes || null,
+      p_notes: form.notes || undefined,
     });
 
     if (error) {
