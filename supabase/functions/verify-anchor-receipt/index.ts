@@ -1,4 +1,8 @@
 // Supabase Edge Function: verify-anchor-receipt (audit F4 residual)
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- Deno edge function: raw JSON-RPC and
+   PostgREST JSON boundaries are deliberately untyped here; this file is excluded from the
+   Vite app typecheck and is type-checked by Deno at deploy time. */
 // Server-side confirmation of a Sepolia anchoring transaction.
 //
 // Why: products.blockchain_tx_status is currently manufacturer-asserted —
