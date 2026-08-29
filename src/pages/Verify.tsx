@@ -25,8 +25,8 @@ import {
   RotateCcw,
   WifiOff,
 } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
 import { generateProductCertificate } from "@/lib/pdf";
+import { useQrScanner } from "@/hooks/use-qr-scanner";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { OnChainProof } from "@/components/OnChainProof";
 import type { Tables } from "@/integrations/supabase/types";
@@ -176,7 +176,6 @@ export default function Verify() {
   // PWA 4.7: code waiting to be verified once connectivity returns
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [events, setEvents] = useState<Tables<"supply_chain_events">[]>([]);
-  const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeoInfo>({
     status: "idle",
@@ -184,8 +183,6 @@ export default function Verify() {
     lng: null,
   });
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const hasScannedRef = useRef(false);
   const isVerifyingRef = useRef(false);
   const handleVerifyRef = useRef<(input?: string) => Promise<void>>();
   const geoRef = useRef<GeoInfo>({ status: "idle", lat: null, lng: null });
@@ -207,34 +204,62 @@ export default function Verify() {
     geoRef.current = geo;
   }, [geo]);
 
+  /* ───────── CAMERA (shared scanner hook) ───────── */
+  // The full html5-qrcode lifecycle (instance management, single-fire decode,
+  // optimistic start/stop, unmount cleanup) lives in useQrScanner — previously
+  // duplicated here and in ScanUpdate.
+  const { active: cameraActive, activeRef, start: startScanner, stop: stopScanner } = useQrScanner({
+    containerId: "qr-reader",
+    fps: 30, // high fps — scan every frame
+    qrbox: (containerWidth) => {
+      // Responsive scan box — larger = much better detection
+      const scanSize = Math.min(Math.floor(containerWidth * 0.8), 400);
+      return { width: scanSize, height: scanSize };
+    },
+    useBarCodeDetectorIfSupported: true, // native BarcodeDetector: faster on Chrome/Android
+    onDecode: (decodedText) => {
+      log("QR DETECTED raw:", decodedText);
+      const code = extractProductCode(decodedText).trim();
+      log("extracted code:", code);
+      if (!code) return false; // not a usable code — keep scanning
+      setQuery(code);
+      handleVerifyRef.current?.(code);
+    },
+    onError: (raw) => {
+      log("CAMERA ERROR:", raw);
+      // User-friendly error messages
+      let msg = "Could not start camera.";
+      const errMsg = raw.toLowerCase();
+      if (
+        errMsg.includes("permission") ||
+        errMsg.includes("denied") ||
+        errMsg.includes("notallowed")
+      ) {
+        msg = "Camera permission denied. Please allow camera access and try again.";
+      } else if (
+        errMsg.includes("notfound") ||
+        errMsg.includes("not found") ||
+        errMsg.includes("no camera")
+      ) {
+        msg = "No camera found on this device.";
+      } else if (
+        errMsg.includes("insecure") ||
+        errMsg.includes("https")
+      ) {
+        msg = "Camera requires HTTPS. Please use a secure connection.";
+      } else if (errMsg.includes("in use") || errMsg.includes("busy")) {
+        msg = "Camera is being used by another app. Close it and try again.";
+      }
+      setCameraError(msg);
+    },
+  });
+
   /* ───────── STOP CAMERA ───────── */
   const stopCamera = useCallback(async () => {
-    log("stopCamera called, scannerRef exists:", !!scannerRef.current);
+    log("stopCamera called");
     clearNudgeTimer();
-    const inst = scannerRef.current;
-    scannerRef.current = null;
-    setCameraActive(false);
-
-    if (!inst) return;
-
-    try {
-      // html5-qrcode exposes getState(): 1=NOT_STARTED, 2=SCANNING, 3=PAUSED
-      const state = inst.getState?.();
-      log("scanner state before stop:", state);
-      if (state === 2 || state === undefined) {
-        await inst.stop();
-        log("scanner stopped OK");
-      }
-    } catch (e: unknown) {
-      log("stop error (safe to ignore):", errorMessage(e));
-    }
-    try {
-      inst.clear();
-      log("scanner cleared OK");
-    } catch (e: unknown) {
-      log("clear error (safe to ignore):", errorMessage(e));
-    }
-  }, [clearNudgeTimer]);
+    await stopScanner();
+  }, [clearNudgeTimer, stopScanner]);
 
   /* ───────── GEO: silent background request ───────── */
   const requestGeo = useCallback(() => {
@@ -409,142 +434,26 @@ export default function Verify() {
   const startCamera = useCallback(async () => {
     log("startCamera called");
     setCameraError(null);
+    clearNudgeTimer();
+    await startScanner();
+    if (!activeRef.current) return; // start failed — onError already surfaced it
+    log("CAMERA IS LIVE — fps=30, responsive qrbox, BarcodeDetector=true");
 
-    // Clean up any existing scanner first
-    if (scannerRef.current) {
-      log("cleaning up old scanner first");
-      await stopCamera();
+    // Nudge if no QR detected within ~20s (camera stays open) — AppFlow §4.2
+    nudgeTimerRef.current = setTimeout(() => {
+      if (!activeRef.current) return;
+      setTroubleNudge(true);
+    }, 20000);
+
+    // ✅ Request geo AFTER camera is live to avoid permission dialog conflict
+    // Small delay so camera permission dialog doesn't overlap geo dialog
+    if (geoRef.current.status === "idle") {
+      setTimeout(() => {
+        log("requesting geo after camera settled");
+        requestGeo();
+      }, 1500);
     }
-
-    const container = document.getElementById("qr-reader");
-    if (!container) {
-      log("FATAL: #qr-reader not in DOM");
-      setCameraError("Scanner container not found. Please refresh.");
-      return;
-    }
-    log("container:", container.offsetWidth, "x", container.offsetHeight);
-
-    hasScannedRef.current = false;
-    container.innerHTML = ""; // Clear old scanner artifacts
-
-    try {
-      log("initializing html5-qrcode...");
-
-      // ✅ Use the FULL working config from v1 (BarcodeDetector + high fps)
-      const scanner = new Html5Qrcode("qr-reader", {
-        verbose: false,
-        useBarCodeDetectorIfSupported: true, // Native BarcodeDetector: faster on Chrome/Android
-      });
-      scannerRef.current = scanner;
-      log("scanner instance created");
-
-      // Responsive scan box — larger = much better detection
-      const containerWidth = container.offsetWidth || 320;
-      const scanSize = Math.min(Math.floor(containerWidth * 0.8), 400);
-      log("scanSize:", scanSize, "from containerWidth:", containerWidth);
-
-      // ✅ HIGH fps + large scan area from v1
-      await scanner.start(
-        { facingMode: "environment" },
-        {
-          fps: 30,                                      // High fps — scan every frame
-          qrbox: { width: scanSize, height: scanSize }, // Large responsive scan area
-          disableFlip: false,                           // Allow mirrored QR codes
-        },
-        (decodedText: string) => {
-          // SUCCESS CALLBACK
-          if (hasScannedRef.current) {
-            log("already handled scan, ignoring");
-            return;
-          }
-          hasScannedRef.current = true;
-
-          log("QR DETECTED raw:", decodedText);
-          const code = extractProductCode(decodedText).trim();
-          log("extracted code:", code);
-
-          if (!code) {
-            hasScannedRef.current = false;
-            return;
-          }
-
-          // Stop scanner immediately
-          const inst = scannerRef.current;
-          scannerRef.current = null;
-          setCameraActive(false);
-          if (inst) {
-            inst
-              .stop()
-              .then(() => {
-                try { inst.clear(); } catch { /* ignore */ }
-              })
-              .catch(() => {});
-          }
-
-          setQuery(code);
-          if (handleVerifyRef.current) handleVerifyRef.current(code);
-        },
-        () => {
-          // Per-frame no-detection — intentionally silent
-        }
-      );
-
-      setCameraActive(true);
-      log("CAMERA IS LIVE — fps=30, scanSize=", scanSize, ", BarcodeDetector=true");
-
-      // Nudge if no QR detected within ~20s (camera stays open) — AppFlow §4.2
-      clearNudgeTimer();
-      nudgeTimerRef.current = setTimeout(() => {
-        if (!hasScannedRef.current && scannerRef.current) {
-          setTroubleNudge(true);
-        }
-      }, 20000);
-
-      // ✅ Request geo AFTER camera is live to avoid permission dialog conflict
-      // Small delay so camera permission dialog doesn't overlap geo dialog
-      if (geoRef.current.status === "idle") {
-        setTimeout(() => {
-          log("requesting geo after camera settled");
-          requestGeo();
-        }, 1500);
-      }
-    } catch (err: unknown) {
-      log("CAMERA ERROR:", errorMessage(err));
-      console.error("Full camera error:", err);
-
-      const inst = scannerRef.current;
-      scannerRef.current = null;
-      setCameraActive(false);
-      if (inst) {
-        try { inst.clear(); } catch { /* ignore */ }
-      }
-
-      // User-friendly error messages
-      let msg = "Could not start camera.";
-      const errMsg = errorMessage(err).toLowerCase();
-      if (
-        errMsg.includes("permission") ||
-        errMsg.includes("denied") ||
-        errMsg.includes("notallowed")
-      ) {
-        msg = "Camera permission denied. Please allow camera access and try again.";
-      } else if (
-        errMsg.includes("notfound") ||
-        errMsg.includes("not found") ||
-        errMsg.includes("no camera")
-      ) {
-        msg = "No camera found on this device.";
-      } else if (
-        errMsg.includes("insecure") ||
-        errMsg.includes("https")
-      ) {
-        msg = "Camera requires HTTPS. Please use a secure connection.";
-      } else if (errMsg.includes("in use") || errMsg.includes("busy")) {
-        msg = "Camera is being used by another app. Close it and try again.";
-      }
-      setCameraError(msg);
-    }
-  }, [clearNudgeTimer, stopCamera, requestGeo]);
+  }, [clearNudgeTimer, startScanner, requestGeo]);
 
   /* ───────── MOUNT / UNMOUNT ───────── */
   useEffect(() => {
@@ -568,7 +477,6 @@ export default function Verify() {
   /* ───────── RESET ───────── */
   const resetVerification = useCallback(async () => {
     log("resetVerification");
-    hasScannedRef.current = false;
     isVerifyingRef.current = false;
     clearNudgeTimer();
     await stopCamera();
