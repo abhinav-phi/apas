@@ -59,13 +59,15 @@ export default function Analytics() {
     try {
       const daysMap: Record<DateRange, number> = { "7d": 7, "30d": 30, "90d": 90, "all": 3650 };
       const since = getDaysAgo(daysMap[dateRange]);
+      const sinceDay = since.slice(0, 10);
+      const todayKey = new Date().toISOString().slice(0, 10);
 
-      // Stats
+      // Stats — estimated counts on high-volume tables (Rules R25)
       const [p, f, s, e, al] = await Promise.all([
         supabase.from("products").select("id", { count: "exact", head: true }),
         supabase.from("products").select("id", { count: "exact", head: true }).eq("is_flagged", true),
-        supabase.from("scan_logs").select("id", { count: "exact", head: true }),
-        supabase.from("supply_chain_events").select("id", { count: "exact", head: true }),
+        supabase.from("scan_logs").select("id", { count: "estimated", head: true }),
+        supabase.from("supply_chain_events").select("id", { count: "estimated", head: true }),
         supabase.from("fraud_alerts").select("id", { count: "exact", head: true }).eq("is_resolved", false),
       ]);
 
@@ -80,21 +82,55 @@ export default function Analytics() {
         alerts: al.count || 0,
       });
 
-      // Time series data
-      const [prodRows, scanRows, alertRows, categoryRows] = await Promise.all([
-        supabase.from("products").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
-        supabase.from("scan_logs").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
-        supabase.from("fraud_alerts").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
-        supabase.from("products").select("category").gte("created_at", since),
-      ]);
+      // Time series — long ranges read the nightly daily_stats rollup
+      // (v8) instead of pulling full scan_logs/fraud_alerts history
+      // into the browser (ImplementationPlan 2.1 "Daily Stats Rollup").
+      if (dateRange === "all" || dateRange === "90d") {
+        const { data: rollup, error: rollupError } = await supabase
+          .from("daily_stats")
+          .select("day, products_created, scans, alerts")
+          .gte("day", sinceDay)
+          .order("day", { ascending: true });
+        if (rollupError) throw rollupError;
 
-      setProductsOverTime(groupByDate(prodRows.data || []));
-      setScansPerDay(groupByDate(scanRows.data || []));
-      setAlertsOverTime(groupByDate(alertRows.data || []));
+        const past = (rollup || []).filter((r) => r.day < todayKey);
 
-      // Category aggregation
+        // Today is a live partial — rollup refreshes nightly at 00:10 UTC
+        const [tP, tS, tA] = await Promise.all([
+          supabase.from("products").select("id", { count: "exact", head: true }).gte("created_at", `${todayKey}T00:00:00Z`),
+          supabase.from("scan_logs").select("id", { count: "estimated", head: true }).gte("created_at", `${todayKey}T00:00:00Z`),
+          supabase.from("fraud_alerts").select("id", { count: "exact", head: true }).gte("created_at", `${todayKey}T00:00:00Z`),
+        ]);
+        const withToday = [
+          ...past,
+          { day: todayKey, products_created: tP.count || 0, scans: tS.count || 0, alerts: tA.count || 0 },
+        ];
+
+        setProductsOverTime(withToday.map((r) => ({ date: formatDateLabel(r.day), value: r.products_created })));
+        setScansPerDay(withToday.map((r) => ({ date: formatDateLabel(r.day), value: r.scans })));
+        setAlertsOverTime(withToday.map((r) => ({ date: formatDateLabel(r.day), value: r.alerts })));
+      } else {
+        const [prodRows, scanRows, alertRows] = await Promise.all([
+          supabase.from("products").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
+          supabase.from("scan_logs").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
+          supabase.from("fraud_alerts").select("created_at").gte("created_at", since).order("created_at", { ascending: true }),
+        ]);
+        setProductsOverTime(groupByDate(prodRows.data || []));
+        setScansPerDay(groupByDate(scanRows.data || []));
+        setAlertsOverTime(groupByDate(alertRows.data || []));
+      }
+
+      // Category distribution — whole selected window. The products table is
+      // bounded (≤ low-tens-of-thousands of rows) so pulling just the `category`
+      // column for the window is cheap, unlike scan_logs/events above.
+      const { data: categoryRows, error: catError } = await supabase
+        .from("products")
+        .select("category")
+        .gte("created_at", since);
+      if (catError) throw catError;
+
       const catCounts: Record<string, number> = {};
-      for (const row of (categoryRows.data || [])) {
+      for (const row of categoryRows) {
         const cat = (row.category || "general").replace(/_/g, " ");
         catCounts[cat] = (catCounts[cat] || 0) + 1;
       }
