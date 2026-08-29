@@ -4,19 +4,43 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Automated Product Authentication System</title>
+  <!-- Brand: the app is "AuthentiChain" everywhere in the UI; the title must match
+       (audit: index.html still said "Automated Product Authentication System",
+       including on the public /verify page a consumer reaches from a QR scan). -->
+  <title>AuthentiChain — Verify Product Authenticity Instantly</title>
 
-  <meta name="description" content="Secure system for verifying product authenticity using QR-based tracking and fraud detection." />
+  <meta name="description" content="AuthentiChain verifies product authenticity instantly: QR-based tracking, on-chain proof and real-time fraud detection across the supply chain." />
   <meta name="author" content="Abhinav" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="/apas.png" />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Automated Product Authentication System" />
+  <meta property="og:title" content="AuthentiChain — Verify Product Authenticity Instantly" />
   <meta property="og:description" content="Verify products instantly. Detect fraud. Ensure authenticity across the supply chain." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/apas.png" />
+  <meta property="og:image:alt" content="AuthentiChain logo" />
+  <!-- TODO(seo): replace /apas.png with a dedicated 1200×630 preview image for
+       full-size link unfurls in WhatsApp/X/Slack (logo-only image letterboxes). -->
+
+  <!-- Twitter/X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AuthentiChain — Verify Product Authenticity Instantly" />
+  <meta name="twitter:description" content="Verify products instantly. Detect fraud. Ensure authenticity across the supply chain." />
+  <meta name="twitter:image" content="/apas.png" />
+
+  <!-- Structured data for crawlers / rich results -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AuthentiChain",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "QR-based product authentication with supply-chain tracking, on-chain anchoring and real-time fraud alerts."
+  }
+  </script>
 </head>
 
   <body>
