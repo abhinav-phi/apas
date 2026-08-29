@@ -1,4 +1,8 @@
 // Supabase Edge Function: verify-wallet-link (audit MEDIUM #7)
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- Deno edge function: raw JSON-RPC and
+   PostgREST JSON boundaries are deliberately untyped here; this file is excluded from the
+   Vite app typecheck and is type-checked by Deno at deploy time. */
 // Server-side ECDSA verification of the wallet-linking signature.
 //
 // Why: `link_wallet_address` only FORMAT-checks the signature (^0x…130$) — the
