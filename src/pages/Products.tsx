@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,7 @@ import {
   Layers, AlertTriangle, RefreshCw, Fuel,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useNavigate } from "react-router-dom";
 import { useBlockchain, type GasEstimate } from "@/hooks/use-blockchain";
 import {
@@ -33,6 +34,12 @@ type Product = Tables<"products">;
 const CATEGORIES = ["general", "pharmaceutical", "electronics", "luxury", "food", "automotive"] as const;
 const PAGE_SIZE = 25;
 
+// Escape PostgREST LIKE wildcards so a user-typed % or \ is treated literally
+// rather than as a wildcard inside the ilike filter.
+function escapeLike(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/%/g, "\\%");
+}
+
 export default function Products() {
   const { user, role } = useAuth();
   const { toast } = useToast();
@@ -43,6 +50,9 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState(1);
+  const debouncedSearch = useDebounce(search, 300);
+  const [totalCount, setTotalCount] = useState(0);
+  const [unanchoredCount, setUnanchoredCount] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [importingCsv, setImportingCsv] = useState(false);
@@ -58,16 +68,54 @@ export default function Products() {
   const [anchorBusy, setAnchorBusy] = useState(false);
   const [batchAnchoring, setBatchAnchoring] = useState(false);
 
+  // Latest filter/page values held in refs so fetchProducts can stay a stable
+  // callback (deps: user/role/toast) while still reading fresh inputs.
+  const pageRef = useRef(page); pageRef.current = page;
+  const searchRef = useRef(debouncedSearch); searchRef.current = debouncedSearch;
+  const categoryRef = useRef(category); categoryRef.current = category;
+
   const fetchProducts = useCallback(async () => {
     if (!user?.id) return;
-    let q = supabase.from("products").select("*").order("created_at", { ascending: false });
+    setLoading(true);
+    const term = (searchRef.current || "").trim();
+    const cat = categoryRef.current;
+    const from = (pageRef.current - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    // R20: ALL filtering + pagination happens server-side. No unbounded
+    // select("*") — we request exactly one page and an exact total count.
+    let q = supabase
+      .from("products")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false });
     if (role === "manufacturer") q = q.eq("manufacturer_id", user.id);
-    const { data, error } = await q;
+    if (cat && cat !== "all") q = q.eq("category", cat);
+    if (term) {
+      const t = escapeLike(term);
+      q = q.or(`name.ilike.%${t}%,product_code.ilike.%${t}%,brand.ilike.%${t}%`);
+    }
+    q = q.range(from, to);
+
+    const { data, error, count } = await q;
     if (error) {
       toast({ title: "Could not load products", description: error.message, variant: "destructive" });
+      setLoading(false);
       return;
     }
-    if (data) setProducts(data);
+    setProducts(data || []);
+    setTotalCount(count || 0);
+    setLoading(false);
+
+    // Unanchored count for the batch-anchor CTA (manufacturer only)
+    if (role === "manufacturer") {
+      const { count: unanchored } = await supabase
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("manufacturer_id", user.id)
+        .eq("status", "active")
+        .is("blockchain_tx", null);
+      setUnanchoredCount(unanchored || 0);
+    }
   }, [user?.id, role, toast]);
 
   const fetchBatches = useCallback(async () => {
@@ -82,16 +130,18 @@ export default function Products() {
 
   useEffect(() => {
     document.title = "Products — AuthentiChain";
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([
-        fetchProducts(),
-        role === "manufacturer" ? fetchBatches() : Promise.resolve()
-      ]);
-      setLoading(false);
-    };
-    init();
-  }, [fetchProducts, fetchBatches, role]);
+  }, []);
+
+  // Server-side fetch: pagination, search and category filtering all happen in
+  // the query (Rule R20). Refetch whenever the page, debounced search, or
+  // category changes. fetchProducts reads inputs from refs so it stays stable.
+  useEffect(() => {
+    fetchProducts();
+  }, [page, debouncedSearch, category, fetchProducts]);
+
+  useEffect(() => {
+    if (role === "manufacturer") fetchBatches();
+  }, [fetchBatches, role]);
 
   // Reset to the first page when the search or category filter changes
   useEffect(() => {
@@ -304,19 +354,7 @@ export default function Products() {
     fetchProducts();
   };
 
-  const filtered = products.filter((p) =>
-    (category === "all" || p.category === category) &&
-    (p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.product_code.toLowerCase().includes(search.toLowerCase()) ||
-      p.brand.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const unanchoredCount = products.filter(
-    (p) => p.status === "active" && !p.blockchain_tx && p.manufacturer_id === user?.id
-  ).length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -624,7 +662,7 @@ export default function Products() {
                   ))
                 ) : (
                   <>
-                    {pageItems.map((p) => (
+                    {products.map((p) => (
                       <tr key={p.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate(`/products/${p.id}`)}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
@@ -651,7 +689,7 @@ export default function Products() {
                         )}
                       </tr>
                     ))}
-                    {filtered.length === 0 && (
+                    {products.length === 0 && (
                       <tr><td colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No products found</td></tr>
                     )}
                   </>
@@ -663,7 +701,7 @@ export default function Products() {
         <PaginationBar
           page={page}
           totalPages={totalPages}
-          totalCount={filtered.length}
+          totalCount={totalCount}
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
           isLoading={loading}
