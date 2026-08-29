@@ -150,7 +150,10 @@ export default function Batches() {
                       >
                         <td className="px-4 py-3 flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center"><FileText className="w-4 h-4 text-primary" /></div>
-                          <span className="text-sm font-medium">{b.name}</span>
+                          {/* Keyboard-accessible row activation (opens the details dialog) */}
+                          <button type="button" className="text-sm font-medium hover:underline" onClick={() => handleRowClick(b)}>
+                            {b.name}
+                          </button>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{b.batch_code}</td>
                         <td className="px-4 py-3 text-sm">{b.product_count}</td>
