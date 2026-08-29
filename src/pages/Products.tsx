@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateProductCode, generateProductHash, generateQRData } from "@/lib/hash";
+import { parseCsv } from "@/lib/csv";
 import {
   Package, Plus, Search, Link2, ExternalLink, Upload, Loader2,
   Layers, AlertTriangle, RefreshCw, Fuel,
@@ -361,6 +362,15 @@ export default function Products() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
+  // Audit MEDIUM #8: robust CSV import.
+  // - RFC-4180 parsing (quoted commas/quotes/newlines) instead of split(',')
+  // - 500-row cap — giant single payloads get rejected by PostgREST
+  // - Per-row validation with row numbers; valid rows still import
+  // - Optional manufacture_date / expiry_date columns, YYYY-MM-DD enforced
+  // - Chunked inserts (100 rows per request)
+  const CSV_MAX_ROWS = 500;
+  const CSV_CHUNK_SIZE = 100;
+
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -370,33 +380,76 @@ export default function Products() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-        if (lines.length < 2) throw new Error("CSV must contain a header and at least one row");
+        const rows = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ""));
+        if (rows.length < 2) throw new Error("CSV must contain a header and at least one row");
 
-        const headers = lines[0].toLowerCase().split(',');
-        const requiredHeaders = ['name', 'brand', 'category'];
-        if (!requiredHeaders.every(h => headers.includes(h))) {
+        const headers = rows[0].map((h) => h.trim().toLowerCase());
+        const requiredHeaders = ["name", "brand", "category"];
+        if (!requiredHeaders.every((h) => headers.includes(h))) {
           throw new Error("CSV must contain columns: name, brand, category");
         }
+        if (rows.length - 1 > CSV_MAX_ROWS) {
+          throw new Error(`Too many rows (${rows.length - 1}). Import at most ${CSV_MAX_ROWS} rows per file — split the CSV and import in batches.`);
+        }
 
-        const nameIdx = headers.indexOf('name');
-        const brandIdx = headers.indexOf('brand');
-        const categoryIdx = headers.indexOf('category');
-        const descIdx = headers.indexOf('description');
-        const originIdx = headers.indexOf('origin_country');
+        const col = (name: string) => headers.indexOf(name);
+        const nameIdx = col("name");
+        const brandIdx = col("brand");
+        const categoryIdx = col("category");
+        const descIdx = col("description");
+        const originIdx = col("origin_country");
+        const mfgIdx = col("manufacture_date");
+        const expIdx = col("expiry_date");
+
+        const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+        const cell = (row: string[], i: number) => (i > -1 ? (row[i] ?? "").trim() : "");
 
         const productsToInsert: TablesInsert<"products">[] = [];
+        const rowErrors: string[] = [];
         const ts = new Date().toISOString();
 
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i].split(',').map(c => c.trim());
-          if (row.length < 3) continue;
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          // +2 → 1-based row number counting the header line
+          const fail = (msg: string) => rowErrors.push(`Row ${i + 2}: ${msg}`);
+
+          const name = cell(row, nameIdx);
+          const brand = cell(row, brandIdx);
+          if (!name || !brand) {
+            fail("name and brand are required");
+            continue;
+          }
+
+          const category = cell(row, categoryIdx).toLowerCase() || "general";
+          if (!(CATEGORIES as readonly string[]).includes(category)) {
+            fail(`unknown category "${category}" — allowed: ${CATEGORIES.join(", ")}`);
+            continue;
+          }
+
+          let manufactureDate: string | null = null;
+          let expiryDate: string | null = null;
+          if (mfgIdx > -1 && cell(row, mfgIdx)) {
+            const v = cell(row, mfgIdx);
+            if (!DATE_RE.test(v)) {
+              fail(`manufacture_date must be YYYY-MM-DD (got "${v}")`);
+              continue;
+            }
+            manufactureDate = v;
+          }
+          if (expIdx > -1 && cell(row, expIdx)) {
+            const v = cell(row, expIdx);
+            if (!DATE_RE.test(v)) {
+              fail(`expiry_date must be YYYY-MM-DD (got "${v}")`);
+              continue;
+            }
+            expiryDate = v;
+          }
 
           const productCode = generateProductCode();
           const hash = generateProductHash({
             productCode,
-            name: row[nameIdx],
-            brand: row[brandIdx],
+            name,
+            brand,
             manufacturerId: user!.id,
             timestamp: ts
           });
@@ -404,39 +457,50 @@ export default function Products() {
 
           productsToInsert.push({
             product_code: productCode,
-            name: row[nameIdx],
-            brand: row[brandIdx],
-            category: row[categoryIdx] || 'general',
-            description: descIdx > -1 ? row[descIdx] : null,
-            origin_country: originIdx > -1 ? row[originIdx] : null,
+            name,
+            brand,
+            category,
+            description: cell(row, descIdx) || null,
+            origin_country: cell(row, originIdx) || null,
+            manufacture_date: manufactureDate,
+            expiry_date: expiryDate,
             manufacturer_id: user!.id,
             verification_hash: hash,
             qr_data: qrData,
           });
         }
 
-        if (productsToInsert.length === 0) throw new Error("No valid rows found");
+        if (productsToInsert.length === 0) {
+          throw new Error(
+            `No valid rows found. ${rowErrors.slice(0, 3).join(" · ")}${rowErrors.length > 3 ? ` …and ${rowErrors.length - 3} more` : ""}`
+          );
+        }
 
-        const { data: insertedProducts, error } = await supabase
-          .from("products")
-          .insert(productsToInsert)
-          .select("id");
-
-        if (error) throw error;
+        // Chunked inserts — one giant payload gets rejected by PostgREST
+        const insertedProducts: { id: string }[] = [];
+        for (let start = 0; start < productsToInsert.length; start += CSV_CHUNK_SIZE) {
+          const chunk = productsToInsert.slice(start, start + CSV_CHUNK_SIZE);
+          const { data, error } = await supabase.from("products").insert(chunk).select("id");
+          if (error) throw error;
+          if (data) insertedProducts.push(...(data as { id: string }[]));
+        }
 
         // Genesis events via server RPC (hash chain computed server-side)
         let eventFailures = 0;
-        if (insertedProducts && insertedProducts.length > 0) {
+        if (insertedProducts.length > 0) {
           const results = await Promise.allSettled(
             insertedProducts.map((p) => recordEvent(p.id, "manufactured"))
           );
           eventFailures = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.success)).length;
         }
 
+        const skipped = rowErrors.length;
         toast({
-          title: "Import Successful",
-          description: `Imported ${productsToInsert.length} products${eventFailures > 0 ? ` — ${eventFailures} genesis events failed` : ""}. Use "Batch Anchor" to put them on-chain in one transaction.`,
-          variant: eventFailures > 0 ? "destructive" : undefined,
+          title: skipped > 0 ? `Imported ${insertedProducts.length} — ${skipped} row(s) skipped` : "Import Successful",
+          description:
+            (skipped > 0 ? `${rowErrors.slice(0, 3).join(" · ")}${rowErrors.length > 3 ? " …" : ""}. ` : "") +
+            `Use "Batch Anchor" to put them on-chain in one transaction.`,
+          variant: skipped > 0 || eventFailures > 0 ? "destructive" : undefined,
         });
         fetchProducts();
       } catch (err: unknown) {
