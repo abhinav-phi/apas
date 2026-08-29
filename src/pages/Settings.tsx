@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useBlockchain } from "@/hooks/use-blockchain";
 import { SEPOLIA_CHAIN_ID, shortAddress, toWalletError } from "@/lib/blockchain";
+import { resizeImage, MAX_UPLOAD_BYTES } from "@/lib/image";
 import { User, Lock, Save, Shield, Wallet, Unlink, BadgeCheck, Loader2, Upload, X } from "lucide-react";
 
 interface WalletRow {
@@ -82,11 +83,16 @@ export default function Settings() {
 
     setUploadingAvatar(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
+      // R26: compress on-device so storage never holds >1MB avatars
+      const blob = await resizeImage(file, { maxDim: 512 });
+      if (blob.size > MAX_UPLOAD_BYTES) {
+        throw new Error("Image could not be compressed under 1MB — try a smaller image");
+      }
+      const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
       const path = `avatars/${user.id}/avatar-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("product-images")
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, blob, { upsert: true, contentType: blob.type });
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from("product-images").getPublicUrl(path);
