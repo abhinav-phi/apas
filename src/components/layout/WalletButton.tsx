@@ -66,7 +66,7 @@ export function WalletButton() {
       <button
         onClick={handleConnect}
         aria-label="Connect wallet"
-        className="flex items-center gap-1.5 px-3 py-1.5 transition-colors hover:bg-muted/50 rounded-md"
+        className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] transition-colors hover:bg-muted/50 rounded-md"
         style={chipStyle}
       >
         <Wallet className="w-3.5 h-3.5" />
@@ -80,7 +80,7 @@ export function WalletButton() {
       <button
         onClick={handleSwitch}
         aria-label="Switch wallet to Sepolia"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-md transition-colors"
         style={{ ...chipStyle, color: "#f9bc48", background: "rgba(249,188,72,0.08)" }}
         title={`Wallet is on chain ${chainId} — click to switch to Sepolia`}
       >
@@ -94,7 +94,7 @@ export function WalletButton() {
     <button
       onClick={disconnect}
       aria-label="Wallet connected — disconnect"
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors hover:bg-muted/50"
+      className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-md transition-colors hover:bg-muted/50"
       style={chipStyle}
       title={`${address} — click to disconnect`}
     >

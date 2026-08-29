@@ -111,7 +111,7 @@ export function NotificationsDropdown() {
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative p-2 transition-colors rounded-full hover:bg-muted/30 focus:outline-none"
+          className="relative flex items-center justify-center min-h-[44px] min-w-[44px] p-2 transition-colors rounded-full hover:bg-muted/30 focus:outline-none"
           style={{ color: unreadCount > 0 ? '#dfe2eb' : '#849490' }}
           aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         >

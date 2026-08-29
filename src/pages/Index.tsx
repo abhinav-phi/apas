@@ -27,7 +27,7 @@ export default function Index() {
       {/* Nav */}
       <nav
         className="sticky top-0 z-50"
-        style={{ background: 'rgba(16,20,26,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(113,255,232,0.08)' }}
+        style={{ background: 'rgba(16,20,26,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(113,255,232,0.08)' }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
