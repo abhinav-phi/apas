@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -45,6 +45,8 @@ export default function Alerts() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 300);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const [live, setLive] = useState(false);
 
   const fetchAlerts = useCallback(async (targetPage: number, q: string, statusFilter: string, sevFilter: string) => {
     setLoading(true);
@@ -94,10 +96,54 @@ export default function Alerts() {
     setLoading(false);
   }, [user?.id, role, toast]);
 
+  // Keep the latest fetch args in refs so the realtime handler (set up once on
+  // mount) never calls fetchAlerts with a stale closure.
+  const fetchAlertsRef = useRef(fetchAlerts);
+  fetchAlertsRef.current = fetchAlerts;
+  const argsRef = useRef({ page, q: debouncedSearch, filter, sev: severityFilter });
+  argsRef.current = { page, q: debouncedSearch, filter, sev: severityFilter };
+
   useEffect(() => {
     document.title = "Alerts — AuthentiChain";
     fetchAlerts(1, debouncedSearch, filter, severityFilter);
   }, [debouncedSearch, filter, severityFilter, fetchAlerts]);
+
+  // FRD-06 (P0): real-time fraud-alert feed. Re-fetch the current view on any
+  // insert/update so new alerts surface without a manual page refresh. RLS
+  // (admin OR manufacturer) governs which rows this client receives over the
+  // channel; the refetch then re-applies the active filters + manufacturer scope.
+  useEffect(() => {
+    const channel = supabase
+      .channel("fraud-alerts-feed")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "fraud_alerts" },
+        () =>
+          fetchAlertsRef.current(
+            argsRef.current.page,
+            argsRef.current.q,
+            argsRef.current.filter,
+            argsRef.current.sev
+          )
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "fraud_alerts" },
+        () =>
+          fetchAlertsRef.current(
+            argsRef.current.page,
+            argsRef.current.q,
+            argsRef.current.filter,
+            argsRef.current.sev
+          )
+      )
+      .subscribe((status) => setLive(status === "SUBSCRIBED"));
+
+    return () => {
+      supabase.removeChannel(channel);
+      setLive(false);
+    };
+  }, []);
 
   const resolveAlert = async (id: string) => {
     setResolving(id);
@@ -131,6 +177,11 @@ export default function Alerts() {
               {unresolvedCount > 0 ? `${unresolvedCount} unresolved alert${unresolvedCount > 1 ? "s" : ""}` : "No active alerts"}
             </p>
           </div>
+          {live && (
+            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest mt-1" style={{ color: "#71ffe8", fontFamily: "IBM Plex Mono, monospace" }}>
+              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#71ffe8" }} /> Live
+            </span>
+          )}
         </div>
 
         {/* Filters */}
