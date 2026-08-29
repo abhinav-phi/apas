@@ -96,7 +96,7 @@ export function WalletButton() {
       aria-label="Wallet connected — disconnect"
       className="flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-md transition-colors hover:bg-muted/50"
       style={chipStyle}
-      title={`${address} — click to disconnect`}
+      title={`${address} — disconnect (revokes this site's account access)`}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-[#71ffe8]" />
       {shortAddress(address)}
