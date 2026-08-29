@@ -13,6 +13,22 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error("Missing Supabase environment variables");
 }
 
+// Default network timeout applied to every Supabase request. Without it a slow
+// or stuck connection leaves skeletons spinning forever — no error ever surfaces
+// (audit item: "infinite skeleton on slow network"). Requests that already carry
+// their own AbortSignal (e.g. Verify's 10s RPC race) are left untouched so the
+// two timeouts don't fight. Realtime (WebSocket) does not use fetch, so it is
+// unaffected.
+const DEFAULT_TIMEOUT_MS = 30000;
+const timeoutFetch: typeof fetch = (input, init) => {
+  if (init?.signal) return fetch(input, init);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  return fetch(input, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +41,9 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true, // useful for OAuth
+    },
+    global: {
+      fetch: timeoutFetch,
     },
   }
 );
