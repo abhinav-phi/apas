@@ -227,6 +227,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             className="lg:hidden p-2 transition-colors"
             style={{ color: '#849490' }}
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={sidebarOpen}
           >
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -248,6 +250,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           {/* Language Toggle */}
           <button
             onClick={toggleLanguage}
+            aria-label="Switch language"
             className="flex items-center gap-1.5 px-3 py-1.5 transition-colors hover:bg-muted/50 rounded-md"
             style={{ color: '#849490', fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}
           >

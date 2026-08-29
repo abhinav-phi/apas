@@ -113,6 +113,7 @@ export function NotificationsDropdown() {
         <button
           className="relative p-2 transition-colors rounded-full hover:bg-muted/30 focus:outline-none"
           style={{ color: unreadCount > 0 ? '#dfe2eb' : '#849490' }}
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         >
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (

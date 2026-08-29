@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useBlockchain, type GasEstimate } from "@/hooks/use-blockchain";
 import {
   SEPOLIA_FAUCET_URL,
@@ -854,7 +854,11 @@ export default function Products() {
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center"><Package className="w-4 h-4 text-primary" /></div>
                             <div>
-                              <p className="text-sm font-medium">{p.name}</p>
+                              {/* Keyboard-accessible row activation: the name is a
+                                  real link (Tab + Enter); the row click stays for mouse */}
+                              <Link to={`/products/${p.id}`} className="text-sm font-medium hover:underline">
+                                {p.name}
+                              </Link>
                               <p className="text-xs text-muted-foreground">{p.brand}</p>
                             </div>
                           </div>
