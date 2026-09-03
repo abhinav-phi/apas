@@ -14,13 +14,13 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = public.system_actor_id()) THEN
     INSERT INTO auth.users (
       id, instance_id, aud, role, email,
-      encrypted_password, email_confirmed_at,
+      encrypted_password, email_confirmed_at, last_sign_in_at,
       raw_app_meta_data, raw_user_meta_data,
       created_at, updated_at
     ) VALUES (
       public.system_actor_id(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
       'system@authentichain.internal',
-      crypt(encode(extensions.gen_random_bytes(18), 'hex'), extensions.gen_salt('bf')),  -- random, unguessable; account is not for login
+      extensions.crypt(encode(extensions.gen_random_bytes(18), 'hex'), extensions.gen_salt('bf')),  -- random, unguessable; account is not for login
       now(), now(),
       '{"provider": "email", "providers": ["email"]}'::jsonb,
       '{"full_name": "AuthentiChain System", "is_system": true}'::jsonb,
@@ -161,7 +161,7 @@ GRANT EXECUTE ON FUNCTION public.expire_products_daily() TO authenticated; -- ma
 -- ┌─────────────────────────────────────────────────┐
 -- │ 4. pg_cron SCHEDULES                             │
 -- └─────────────────────────────────────────────────┘
-DO $$
+DO $do$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     BEGIN
@@ -169,7 +169,7 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
       RAISE NOTICE 'pg_cron not available — enable it in the Supabase dashboard, then re-run this section.';
       RETURN;
-    END IF;
+    END;
   END IF;
 
   -- Replace any previous schedule with the same name (idempotent)
@@ -198,6 +198,6 @@ BEGIN
 
   RAISE NOTICE 'Cron jobs scheduled: authentichain-auto-expiry (00:05 UTC), authentichain-daily-stats (00:10 UTC)';
 END;
-$$;
+$do$;
 
 SELECT 'v8 applied' AS status;

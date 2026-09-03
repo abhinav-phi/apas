@@ -26,7 +26,6 @@ import { useBlockchain, type GasEstimate } from "@/hooks/use-blockchain";
 import {
   SEPOLIA_FAUCET_URL,
   etherscanTxUrl,
-  publicClient,
   toWalletError,
 } from "@/lib/blockchain";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -296,24 +295,14 @@ export default function Products() {
     }
   };
 
-  // Re-check a TX that is still marked pending. Prefers the server-side
-  // Edge Function (authoritative receipt verification, audit F4 residual);
-  // falls back to a direct public-RPC read when the function is not deployed.
+  // Re-check a TX that is still marked pending. The verify-anchor-receipt Edge
+  // Function re-reads the receipt from an independent RPC and writes the
+  // authoritative status — clients can no longer set confirmed/failed directly
+  // (post-audit hardening: record_blockchain_anchor restricts those to
+  // service_role).
   const handleRecheckPending = async (product: Product) => {
     if (!product.blockchain_tx) return;
     const txHash = product.blockchain_tx;
-    const applyStatus = async (status: "confirmed" | "failed") => {
-      const { error } = await supabase.rpc("record_blockchain_anchor", {
-        p_product_id: product.id, p_tx_hash: txHash, p_status: status,
-      });
-      if (error) throw new Error(error.message);
-      toast({
-        title: status === "confirmed" ? "✓ Anchor confirmed" : "Anchor failed on-chain",
-        description: status === "confirmed" ? etherscanTxUrl(txHash) : "The transaction reverted.",
-        variant: status === "confirmed" ? undefined : "destructive",
-      });
-      fetchProducts();
-    };
     try {
       const { data, error } = await supabase.functions.invoke("verify-anchor-receipt", {
         body: { productId: product.id, txHash },
@@ -325,15 +314,23 @@ export default function Products() {
         toast({ title: "Still pending", description: "The transaction has not been mined yet — check again shortly." });
         return;
       }
-      await applyStatus(result.status ?? "failed");
-    } catch {
-      // Edge Function unavailable (not deployed) — public-RPC fallback
-      try {
-        const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
-        await applyStatus(receipt.status === "success" ? "confirmed" : "failed");
-      } catch {
-        toast({ title: "Still pending", description: "The transaction has not been mined yet — check again shortly." });
-      }
+      const status = result.status ?? "failed";
+      toast({
+        title: status === "confirmed" ? "✓ Anchor confirmed" : "Anchor failed on-chain",
+        description: status === "confirmed" ? etherscanTxUrl(txHash) : "The transaction reverted.",
+        variant: status === "confirmed" ? undefined : "destructive",
+      });
+      fetchProducts();
+    } catch (err: unknown) {
+      // Distinguish "not mined yet" from real failures instead of labeling
+      // every error as pending (audit P2).
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      const isPending = /not yet mined|pending/i.test(msg);
+      toast({
+        title: isPending ? "Still pending" : "Re-check failed",
+        description: msg,
+        variant: isPending ? undefined : "destructive",
+      });
     }
   };
 

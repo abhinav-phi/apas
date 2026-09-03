@@ -18,6 +18,7 @@ import {
   type Eip1193Provider,
 } from "@/lib/blockchain";
 import type { Hash } from "viem";
+import { sepolia } from "viem/chains";
 
 export interface WalletState {
   installed: boolean;
@@ -49,6 +50,26 @@ async function requestAccounts(provider: Eip1193Provider): Promise<string[]> {
 async function requestChainId(provider: Eip1193Provider): Promise<number | null> {
   const hex = (await provider.request({ method: "eth_chainId" })) as string | undefined;
   return hex ? parseInt(hex, 16) : null;
+}
+
+/**
+ * Ask the verify-anchor-receipt Edge Function to re-read the TX receipt from an
+ * independent RPC and persist the authoritative anchor status.
+ * Returns true only when the server verified AND stored a final status.
+ */
+async function verifyAnchorServerSide(productId: string, txHash: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke("verify-anchor-receipt", {
+      body: { productId, txHash },
+    });
+    if (error) return false;
+    const result = data as { ok?: boolean; mined?: boolean; status?: string };
+    return Boolean(
+      result?.ok && result.mined && (result.status === "confirmed" || result.status === "failed")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function useBlockchain() {
@@ -186,11 +207,16 @@ export function useBlockchain() {
     let address = state.address;
     if (!address) address = await connect();
     if (!address) throw new WalletError("Wallet connection cancelled", "cancelled");
-    if (state.chainId !== null && state.chainId !== SEPOLIA_CHAIN_ID) {
+    // Query the wallet live instead of trusting cached React state — after a
+    // fresh connect() the closure still holds chainId === null, which used to
+    // skip the wrong-network guard entirely (audit P1).
+    const provider = providerRef.current ?? getInjectedProvider();
+    const liveChainId = provider ? await requestChainId(provider) : null;
+    if (liveChainId !== null && liveChainId !== SEPOLIA_CHAIN_ID) {
       await switchToSepolia();
     }
     return address;
-  }, [state.address, state.chainId, connect, switchToSepolia]);
+  }, [state.address, connect, switchToSepolia]);
 
   // EIP-1559 cost estimate shown before the user signs
   const estimateAnchorCost = useCallback(
@@ -198,7 +224,12 @@ export function useBlockchain() {
       if (!isBlockchainConfigured()) {
         throw new WalletError("Contract not configured", "unconfigured");
       }
+      // registerProduct/registerProducts are onlyManufacturer — the simulation
+      // needs the connected manufacturer as `from` or it reverts Unauthorized
+      // (audit P1).
+      const address = await ensureReady();
       const gasUnits = await publicClient.estimateContractGas({
+        account: address as `0x${string}`,
         address: CONTRACT_ADDRESS as `0x${string}`,
         abi: PRODUCT_TRACKER_ABI,
         functionName: "registerProduct",
@@ -214,10 +245,13 @@ export function useBlockchain() {
       const estEth = Number((gasUnits * maxFeePerGas) / 10n ** 12n) / 1e6; // ETH, 6dp
       return { gasUnits, maxFeePerGas, maxPriorityFeePerGas, estEth: estEth.toFixed(6) };
     },
-    []
+    [ensureReady]
   );
 
-  // Full anchor flow: sign → record 'pending' → wait receipt → record final status
+  // Full anchor flow: sign → record 'pending' → wait receipt → server-side verify.
+  // The confirmed/failed transition is server-attested (post-audit hardening):
+  // the verify-anchor-receipt Edge Function reads the receipt from Sepolia and
+  // writes the authoritative status; clients can only propose 'pending'.
   const anchorProduct = useCallback(
     async (product: { id: string; verificationHash: string; batchCode: string }): Promise<AnchorResult> => {
       const address = await ensureReady();
@@ -235,19 +269,23 @@ export function useBlockchain() {
             sha256ToBytes32(product.verificationHash),
             product.batchCode,
           ],
-          chain: null,
+          // viem asserts the wallet is on Sepolia before broadcasting — with
+          // `chain: null` a mainnet wallet would sign and burn real ETH (audit P1)
+          chain: sepolia,
         });
         txHash = hash as Hash;
       } catch (err: unknown) {
         throw toWalletError(err);
       }
 
-      const { error: rpcError } = await supabase.rpc("record_blockchain_anchor", {
+      // Best-effort: if the pending-record fails after broadcast, still wait
+      // for the receipt and try to persist the final status so a paid TX is
+      // never orphaned (audit P2).
+      await supabase.rpc("record_blockchain_anchor", {
         p_product_id: product.id,
         p_tx_hash: txHash,
         p_status: "pending",
       });
-      if (rpcError) throw new WalletError(rpcError.message, "rpc_error");
 
       let status: "confirmed" | "failed" = "failed";
       try {
@@ -258,12 +296,18 @@ export function useBlockchain() {
         throw toWalletError(err);
       }
 
-      const { error: statusError } = await supabase.rpc("record_blockchain_anchor", {
-        p_product_id: product.id,
-        p_tx_hash: txHash,
-        p_status: status,
-      });
-      if (statusError) throw new WalletError(statusError.message, "rpc_error");
+      // Server-verified status: the Edge Function re-reads the receipt from an
+      // independent RPC and writes the authoritative result. Falls back to the
+      // client-observed status only if the function is unreachable.
+      const verified = await verifyAnchorServerSide(product.id, txHash);
+      if (!verified) {
+        const { error: statusError } = await supabase.rpc("record_blockchain_anchor", {
+          p_product_id: product.id,
+          p_tx_hash: txHash,
+          p_status: status,
+        });
+        if (statusError) throw new WalletError(statusError.message, "rpc_error");
+      }
 
       return { txHash, status };
     },
@@ -283,7 +327,10 @@ export function useBlockchain() {
       }
       const ids = products.map((p) => uuidToBytes32(p.id));
       const hashes = products.map((p) => sha256ToBytes32(p.verificationHash));
+      // onlyManufacturer simulation needs the caller account (audit P1)
+      const address = await ensureReady();
       const gasUnits = await publicClient.estimateContractGas({
+        account: address as `0x${string}`,
         address: CONTRACT_ADDRESS as `0x${string}`,
         abi: PRODUCT_TRACKER_ABI,
         functionName: "registerProducts",
@@ -295,7 +342,7 @@ export function useBlockchain() {
       const estEth = Number((gasUnits * maxFeePerGas) / 10n ** 12n) / 1e6; // ETH, 6dp
       return { gasUnits, maxFeePerGas, maxPriorityFeePerGas, estEth: estEth.toFixed(6) };
     },
-    []
+    [ensureReady]
   );
 
   // Batch variant for CSV bulk imports — one transaction via registerProducts
@@ -316,14 +363,17 @@ export function useBlockchain() {
           abi: PRODUCT_TRACKER_ABI,
           functionName: "registerProducts",
           args: [ids, hashes, batchCode],
-          chain: null,
+          // viem asserts the wallet is on Sepolia before broadcasting (audit P1)
+          chain: sepolia,
         });
         txHash = hash as Hash;
       } catch (err: unknown) {
         throw toWalletError(err);
       }
 
-      const receipts = await Promise.all(
+      // Best-effort pending records: one failed row must not orphan the
+      // others or lose track of a paid TX (audit P2).
+      await Promise.all(
         products.map((p) =>
           supabase.rpc("record_blockchain_anchor", {
             p_product_id: p.id,
@@ -332,22 +382,32 @@ export function useBlockchain() {
           })
         )
       );
-      const firstError = receipts.find((r) => r.error);
-      if (firstError?.error) throw new WalletError(firstError.error.message, "rpc_error");
 
       let status: "confirmed" | "failed" = "failed";
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      status = receipt.status === "success" ? "confirmed" : "failed";
+      try {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        status = receipt.status === "success" ? "confirmed" : "failed";
+      } catch (err: unknown) {
+        // RPC timeout/drop: leave as pending — user can retry the recheck
+        throw toWalletError(err);
+      }
 
-      await Promise.all(
-        products.map((p) =>
-          supabase.rpc("record_blockchain_anchor", {
-            p_product_id: p.id,
-            p_tx_hash: txHash,
-            p_status: status,
-          })
-        )
+      const verified = await Promise.all(
+        products.map((p) => verifyAnchorServerSide(p.id, txHash))
       );
+      if (verified.some((v) => !v)) {
+        await Promise.all(
+          products
+            .filter((_, i) => !verified[i])
+            .map((p) =>
+              supabase.rpc("record_blockchain_anchor", {
+                p_product_id: p.id,
+                p_tx_hash: txHash,
+                p_status: status,
+              })
+            )
+        );
+      }
 
       return { txHash, status };
     },

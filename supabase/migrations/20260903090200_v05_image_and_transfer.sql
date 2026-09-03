@@ -32,6 +32,8 @@ ALTER TABLE public.ownership_transfers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Manufacturers can insert transfers" ON public.ownership_transfers;
 DROP POLICY IF EXISTS "Users can view own transfers" ON public.ownership_transfers;
 DROP POLICY IF EXISTS "Admins can see all transfers" ON public.ownership_transfers;
+DROP POLICY IF EXISTS "Authenticated users can insert transfers" ON public.ownership_transfers;
+DROP POLICY IF EXISTS "Users can insert transfers" ON public.ownership_transfers;
 
 -- Manufacturers and suppliers can create transfers for their products
 CREATE POLICY "Authenticated users can insert transfers"

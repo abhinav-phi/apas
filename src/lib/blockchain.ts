@@ -66,8 +66,11 @@ export function getInjectedProvider(): Eip1193Provider | null {
 // ── Clients ─────────────────────────────────────────────────────────────
 export const publicClient = createPublicClient({
   chain: sepolia,
+  // Filter the URL strings BEFORE wrapping: http(undefined) is truthy and used
+  // to silently keep an empty transport that fell back to viem's chain default
+  // while every read still paid the primary's timeout (audit P2).
   transport: fallback(
-    [http(RPC_PRIMARY), http(RPC_FALLBACK_1), http(RPC_FALLBACK_2)].filter(Boolean),
+    [RPC_PRIMARY, RPC_FALLBACK_1, RPC_FALLBACK_2].filter(Boolean).map((url) => http(url)),
     { rank: false }
   ),
 });

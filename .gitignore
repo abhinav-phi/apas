@@ -36,3 +36,9 @@ dist-ssr
 # Documentation and tracking
 /docs
 *.tsbuildinfo
+.vercel
+.env*
+
+# Vercel & Supabase CLI state
+.vercel
+supabase/.temp

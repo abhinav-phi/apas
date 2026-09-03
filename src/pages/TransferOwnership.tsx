@@ -54,10 +54,13 @@ export default function TransferOwnership() {
   const fetchProducts = useCallback(async () => {
     if (!user?.id) return;
     setLoadingProds(true);
+    // Custody, not creation: a supplier must see products transferred TO them
+    // (current_owner_id), a manufacturer sees products still in their custody.
+    // Before this fix suppliers always saw "No active products found" (audit P1).
     const { data, error } = await supabase
       .from("products")
       .select("id, name, product_code, brand, status, category, image_url, is_flagged")
-      .eq("manufacturer_id", user.id)
+      .or(`current_owner_id.eq.${user.id},and(manufacturer_id.eq.${user.id},current_owner_id.is.null)`)
       .eq("status", "active")
       .order("created_at", { ascending: false });
     if (error) toast({ title: "Could not load products", description: error.message, variant: "destructive" });
